@@ -1,0 +1,30 @@
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path('', views.dashboard, name='dashboard'),
+    path('machines/', views.asset_list, name='asset_list'),
+    path('machines/new/', views.asset_edit, name='asset_create'),
+    path('machines/<str:uid>/', views.asset_detail, name='asset_detail'),
+    path('machines/<str:uid>/edit/', views.asset_edit, name='asset_edit'),
+    path('machines/<str:uid>/retire/', views.asset_retire, name='asset_retire'),
+    path('machines/<str:uid>/qr.svg', views.asset_qr, name='asset_qr'),
+    path('machines/<str:uid>/image/', views.asset_image, name='asset_image'),
+    path('tickets/', views.ticket_list, name='ticket_list'),
+    path('tickets/new/', views.ticket_edit, name='ticket_create'),
+    path('tickets/<str:pk>/', views.ticket_detail, name='ticket_detail'),
+    path('tickets/<str:pk>/edit/', views.ticket_edit, name='ticket_edit'),
+    path('tickets/<str:pk>/start/', views.ticket_start, name='ticket_start'),
+    path('tickets/<str:pk>/cancel/', views.ticket_cancel, name='ticket_cancel'),
+    path('tickets/<str:pk>/report/', views.report_edit, name='report_edit'),
+    path('tickets/<str:pk>/review/', views.ticket_review, name='ticket_review'),
+    path('evidence/<int:pk>/', views.attachment, name='attachment'),
+    path('schedule/', views.schedule, name='schedule'),
+    path('schedule/generate/', views.generate_schedule, name='generate_schedule'),
+    path('analytics/', views.analytics, name='analytics'),
+    path('data/', views.source_data, name='source_data'),
+    path('data/<str:table>/', views.source_data, name='source_table'),
+    path('data/<str:table>/add/', views.source_add, name='source_add'),
+    path('data/<str:table>/export/', views.export_table, name='export_table'),
+    path('archives/<int:pk>/download/', views.download_source, name='download_source'),
+]

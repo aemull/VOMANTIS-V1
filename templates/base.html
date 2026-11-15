@@ -1,0 +1,45 @@
+{% load static %}
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#191c24"><title>{{ title|default:'VOMANTIS' }} · VOMANTIS</title>
+  <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
+  <link rel="stylesheet" href="{% static 'corona/vendors/mdi/css/materialdesignicons.min.css' %}">
+  <link rel="stylesheet" href="{% static 'corona/vendors/css/vendor.bundle.base.css' %}">
+  <link rel="stylesheet" href="{% static 'corona/css/style.css' %}">
+  <link rel="stylesheet" href="{% static 'app.css' %}">
+  <script src="{% static 'app.js' %}" defer></script>
+</head>
+<body>
+<a href="#main" class="skip-link">Lewati navigasi</a>
+<div class="app-shell">
+  <aside class="app-sidebar" id="app-sidebar" aria-label="Navigasi utama">
+    <a class="brand" href="{% url 'dashboard' %}"><span class="brand-mark"><i class="mdi mdi-pulse" aria-hidden="true"></i></span> VOMANTIS<span class="brand-dot">.</span></a>
+    <div class="workspace-label">MAINTENANCE WORKSPACE</div>
+    <div class="workspace"><span class="workspace-icon"><i class="mdi mdi-factory" aria-hidden="true"></i></span><div>Operasional mesin<small>Digital maintenance system</small></div><span class="online-dot"></span></div>
+    <div class="nav-caption">WORKSPACE</div>
+    <nav class="app-nav">
+      <a class="{% if active_nav == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}"><i class="mdi mdi-view-dashboard-outline" aria-hidden="true"></i> Dashboard</a>
+      <a class="{% if active_nav == 'assets' %}active{% endif %}" href="{% url 'asset_list' %}"><i class="mdi mdi-cube-outline" aria-hidden="true"></i> Master mesin</a>
+      <a class="{% if active_nav == 'tickets' %}active{% endif %}" href="{% url 'ticket_list' %}"><i class="mdi mdi-clipboard-text-outline" aria-hidden="true"></i> Work order {% if review_count %}<span class="nav-count">{{ review_count }}</span>{% endif %}</a>
+      <a class="{% if active_nav == 'schedule' %}active{% endif %}" href="{% url 'schedule' %}"><i class="mdi mdi-calendar-blank" aria-hidden="true"></i> Jadwal maintenance</a>
+      {% if is_manager %}<div class="nav-caption">MONITORING</div>
+      <a class="{% if active_nav == 'analytics' %}active{% endif %}" href="{% url 'analytics' %}"><i class="mdi mdi-chart-bar" aria-hidden="true"></i> Statistik & KPI</a>
+      <a class="{% if active_nav == 'data' %}active{% endif %}" href="{% url 'source_data' %}"><i class="mdi mdi-database" aria-hidden="true"></i> Data & arsip</a>{% endif %}
+    </nav>
+    <div class="sidebar-bottom"><div class="system-note"><span class="online-dot"></span> Setiap perawatan, tercatat.<small>Riwayat mesin dalam satu tempat.</small></div>
+      <div class="user-profile"><span class="avatar">{{ user.username|first|upper }}</span><div><strong>{{ user.get_full_name|default:user.username }}</strong><small>{{ role_name }}</small></div></div>
+      <div class="account-actions"><a href="{% url 'password_change' %}">Ubah password</a><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link-button" type="submit">Keluar <i class="mdi mdi-logout" aria-hidden="true"></i></button></form></div>
+    </div>
+  </aside>
+  <div class="app-body">
+    <header class="app-header"><button id="menu-toggle" class="icon-button mobile-menu" aria-label="Buka menu" aria-expanded="false" aria-controls="app-sidebar"><i class="mdi mdi-menu" aria-hidden="true"></i></button><div class="breadcrumb-line">Workspace <span>/</span> <strong>{{ title|default:'Pengaturan akun' }}</strong></div><div class="header-right"><span class="desktop-only">{% now 'l, d M Y' %}</span>{% if is_manager %}<a class="notification-link" href="{% url 'ticket_list' %}?status=Review" aria-label="{{ review_count }} laporan menunggu review"><i class="mdi mdi-bell-outline" aria-hidden="true"></i>{% if review_count %}<b>{{ review_count }}</b>{% endif %}</a>{% endif %}<span class="role-pill">{{ role_name }}</span></div></header>
+    <main id="main" class="app-main">
+      {% for message in messages %}<div class="notice {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
+      {% block content %}{% endblock %}
+    </main>
+    <footer class="app-footer"><span>VOMANTIS <span class="muted">/ Maintenance management</span></span><span>Dirancang untuk mesin yang terus bekerja.</span></footer>
+  </div>
+</div>
+</body></html>
