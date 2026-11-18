@@ -2,6 +2,8 @@
 
 Aplikasi web maintenance mesin berbasis **Django**, menggunakan **SQLite** untuk database sementara. Antarmuka berbahasa Indonesia memakai CSS, font, dan ikon **Corona Admin** dari direktori `template_styles`. Tidak perlu menjalankan npm atau mengompilasi template.
 
+**Panduan pengguna:** [Panduan Penggunaan VOMANTIS](docs/PANDUAN_PENGGUNAAN.md) — langkah setiap fitur, hak akses, contoh penggunaan, serta screenshot fitur dan langkah penggunaan.
+
 ## 1. Menjalankan aplikasi yang sudah disiapkan
 
 Workspace ini sudah berisi `.venv`, `db.sqlite3`, data sumber yang diimpor, dan data contoh berlabel **DEMO**.
