@@ -1,4 +1,4 @@
-"""Read the supplied MySQL dump as data, never execute it against SQLite."""
+"""Read the supplied MySQL dump as data, never execute its SQL directly."""
 import hashlib
 import re
 from collections import Counter

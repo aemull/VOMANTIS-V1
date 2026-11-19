@@ -10,8 +10,6 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Migrasi gagal.' }
     & $pythonExecutable manage.py create_roles
     if ($LASTEXITCODE -ne 0) { throw 'Pembuatan grup gagal.' }
-    & $pythonExecutable manage.py import_main_data
-    if ($LASTEXITCODE -ne 0) { throw 'Impor sumber gagal.' }
     & $pythonExecutable manage.py generate_schedules
     if ($LASTEXITCODE -ne 0) { throw 'Penjadwalan awal gagal.' }
     $schedulerProcess = Start-Process -FilePath $pythonExecutable -ArgumentList @('manage.py', 'run_scheduler') -WorkingDirectory $projectDirectory -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $projectDirectory 'scheduler.log') -RedirectStandardError (Join-Path $projectDirectory 'scheduler-error.log')

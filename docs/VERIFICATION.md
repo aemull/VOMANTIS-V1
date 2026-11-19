@@ -1,5 +1,30 @@
 # Hasil verifikasi
 
+## Seeder admin saja — 19 November 2026
+
+- `seed_admin` membuat satu superuser aktif, tanpa data operasional atau akun contoh. Setup Debian menjalankannya setelah migrasi dan pembuatan grup.
+- Password diisi dua kali melalui terminal atau diberikan lewat `DJANGO_SUPERUSER_PASSWORD`; validator Django tetap berlaku. Pemanggilan ulang tidak mengubah password/profil akun lama, dan benturan dengan akun biasa/nonaktif ditolak.
+- 25 tes aplikasi lulus pada SQLite, termasuk pembuatan admin, login/akses halaman kosong, pemanggilan ulang, penolakan password lemah, konfirmasi password, dan pemeriksaan bahwa data operasional tetap kosong. Sintaks Bash installer dan pemeriksaan konsistensi migrasi lulus.
+
+## Instalasi fresh tanpa seeder — 19 November 2026
+
+- Setup Debian dan `start.ps1` hanya menjalankan migrasi dan pembuatan grup, tanpa impor SQL atau seeder otomatis.
+- Perintah `seed_demo` serta kredensial demo dihapus. Browser smoke test memakai akun yang diberikan melalui environment dan mendukung aplikasi kosong.
+- 21 tes lulus pada SQLite, termasuk bootstrap berulang tanpa data operasional/akun bawaan dan akses administrator ke halaman kosong.
+- Database lokal dibersihkan setelah pemeriksaan bahwa seluruh mesin dan akun berasal dari demo. Seluruh model aplikasi dan akun pengguna kini kosong; grup Manager/Teknisi tetap tersedia. Sebanyak 17 berkas media dipindahkan dari penggunaan aktif dengan backup terverifikasi di `artifacts/pre-fresh-backup/`.
+- Sintaks Bash dan `--help` installer lulus. Instalasi penuh pada server Debian tujuan belum dijalankan.
+
+## Perubahan MariaDB dan setup Debian — 19 November 2026
+
+- 20 tes aplikasi lulus pada MariaDB 11.4.5 dengan mysqlclient 2.2.8, Python 3.14, dan Django 5.2.19. Server pengujian bersifat sementara dan terpisah dari database kerja.
+- 20 tes yang sama lulus pada SQLite sebagai jalur kompatibilitas ekspor data lama.
+- Migrasi database kosong sampai `0004`, pemeriksaan database, dan `makemigrations --check --dry-run` lulus.
+- Salinan database SQLite yang sudah berisi data berhasil dimigrasikan, diekspor, dan diimpor ke MariaDB: 98 objek pada 16 jenis model, jumlah per model cocok. Arsip SQL terverifikasi: 14 tabel, 5 baris, checksum dan snapshot cocok. Database SQLite asal tidak dimodifikasi.
+- Constraint jadwal menolak benturan termasuk lewat `QuerySet.update`, serta melepaskan slot ketika tiket Selesai/Batal atau konfirmasi dibatalkan.
+- Sintaks Bash dan keluaran `--help` skrip setup berhasil diperiksa. Instalasi keseluruhan pada server Debian kosong, penerbitan sertifikat, serta reboot service belum diuji langsung; memerlukan server tujuan dan DNS yang sesuai.
+
+## Verifikasi awal SQLite
+
 Pengujian dilakukan pada **12 November 2026 (Asia/Jakarta)**, menggunakan Windows, Python 3.14.7, Django 5.2.19, dan SQLite.
 
 ## Pemeriksaan yang lulus

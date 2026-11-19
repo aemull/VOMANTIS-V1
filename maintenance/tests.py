@@ -3,12 +3,14 @@ import io
 import tempfile
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 from PIL import Image
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.core.management import call_command
+from django.core.management import call_command, get_commands
+from django.core.management.base import CommandError
 from django.db import IntegrityError, transaction, connection
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
@@ -40,10 +42,7 @@ class SourcePreservationTests(TestCase):
         self.assertIn('Σ', IndicatorFormula.objects.get(pk='Downtime').rumus)
         with connection.cursor() as cursor:
             for table, expected in archive.summary['tables'].items():
-                cursor.execute(f'PRAGMA table_info("{table}")')
-                # SQLite table_info omits generated columns; table_xinfo includes them.
-                cursor.execute(f'PRAGMA table_xinfo("{table}")')
-                actual = {row[1] for row in cursor.fetchall()}
+                actual = {column.name for column in connection.introspection.get_table_description(cursor, table)}
                 self.assertTrue(set(expected).issubset(actual), table)
         same, created = import_source(path)
         self.assertFalse(created)
@@ -162,7 +161,7 @@ class WorkflowTests(TestCase):
         self.client.force_login(self.tech)
         response = self.client.get(reverse('attachment', args=[evidence.pk]))
         self.assertEqual(response.status_code, 200)
-        response.close()
+        self.assertTrue(b''.join(response.streaming_content))
         self.client.logout()
         self.assertEqual(self.client.get(reverse('attachment', args=[evidence.pk])).status_code, 302)
 
@@ -216,6 +215,29 @@ class WorkflowTests(TestCase):
             WorkOrder.objects.create(asset=self.asset, assigned_to=self.tech, confirmed=True,
                                      scheduled_date=self.ticket.scheduled_date, status='Proses')
 
+    def test_database_reservation_tracks_status_confirmation_and_bulk_updates(self):
+        day = self.ticket.scheduled_date
+        pending = WorkOrder.objects.create(asset=self.asset, assigned_to=self.tech, scheduled_date=day)
+        # Unconfirmed and unassigned tickets may share the date.
+        WorkOrder.objects.create(asset=self.asset, scheduled_date=day, confirmed=True)
+        WorkOrder.objects.create(asset=self.asset, scheduled_date=day, confirmed=True)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            WorkOrder.objects.filter(pk=pending.pk).update(confirmed=True)
+        for status in ['Selesai', 'Batal']:
+            with self.subTest(status=status):
+                WorkOrder.objects.filter(pk=self.ticket.pk).update(status=status)
+                WorkOrder.objects.filter(pk=pending.pk).update(confirmed=True)
+                pending.refresh_from_db()
+                self.assertEqual(pending.active_scheduled_date, day)
+                with self.assertRaises(IntegrityError), transaction.atomic():
+                    WorkOrder.objects.filter(pk=self.ticket.pk).update(status='Revisi')
+                WorkOrder.objects.filter(pk=pending.pk).update(confirmed=False)
+                pending.refresh_from_db()
+                self.assertIsNone(pending.active_scheduled_date)
+                WorkOrder.objects.filter(pk=self.ticket.pk).update(status='Open')
+        WorkOrder.objects.filter(pk=self.ticket.pk).update(scheduled_date=date(2026, 11, 13))
+        WorkOrder.objects.filter(pk=pending.pk).update(confirmed=True)
+
     def test_manager_can_create_edit_and_cancel_without_erasing_ticket(self):
         self.client.force_login(self.manager)
         payload = {'asset': self.asset.pk, 'jenis': 'Korektif', 'prioritas': 'Tinggi', 'severity': 'Rusak Ringan',
@@ -249,7 +271,9 @@ class WorkflowTests(TestCase):
         self.assertEqual(asset.nama_mesin, 'Mesin diperbarui')
         response = self.client.get(reverse('asset_image', args=[uid]))
         self.assertEqual(response.status_code, 200)
-        response.close()
+        # Consume the test client's stream so its wrapper closes the file without
+        # sending close_old_connections inside TestCase's database transaction.
+        self.assertTrue(b''.join(response.streaming_content))
         self.assertEqual(self.client.post(reverse('asset_create'), payload).status_code, 200)
         self.assertEqual(Asset.objects.filter(serial_number='SN-UNIQUE').count(), 1)
 
@@ -327,11 +351,76 @@ class WorkflowTests(TestCase):
         with self.assertRaises(IntegrityError), transaction.atomic():
             SUS.objects.create(q1=6)
 
-    def test_seed_is_repeatable_and_does_not_reset_credentials(self):
-        call_command('seed_demo', password='ExamplePassword123!', stdout=io.StringIO())
-        count = Asset.objects.count()
-        files = Attachment.objects.count()
-        call_command('seed_demo', password='DifferentPassword123!', stdout=io.StringIO())
-        self.assertEqual(Asset.objects.count(), count)
-        self.assertEqual(Attachment.objects.count(), files)
-        self.assertTrue(get_user_model().objects.get(username='manager').check_password('ExamplePassword123!'))
+
+class FreshInstallationTests(TestCase):
+    def test_bootstrap_creates_roles_without_users_or_business_data(self):
+        for _ in range(2):
+            call_command('create_roles', stdout=io.StringIO())
+            call_command('generate_schedules', stdout=io.StringIO())
+        self.assertEqual(set(Group.objects.values_list('name', flat=True)), {'Manager', 'Teknisi'})
+        self.assertFalse(get_user_model().objects.exists())
+        for model in [Asset, WorkOrder, MaintenanceReport, Attachment, TicketEvent,
+                      SourceArchive, SourceRecord, IndicatorFormula, KPI, SUS, PMSchedule]:
+            with self.subTest(model=model.__name__):
+                self.assertFalse(model.objects.exists())
+        self.assertNotIn('seed_demo', get_commands())
+
+    def test_first_administrator_can_open_empty_application(self):
+        call_command('create_roles', stdout=io.StringIO())
+        with patch.dict('os.environ', {'DJANGO_SUPERUSER_PASSWORD': 'TestPassword!123'}):
+            call_command('seed_admin', username='fresh-admin', noinput=True, stdout=io.StringIO())
+        admin = get_user_model().objects.get(username='fresh-admin')
+        self.assertTrue(admin.is_superuser and admin.is_staff and admin.is_active)
+        self.assertTrue(admin.check_password('TestPassword!123'))
+        self.client.force_login(admin)
+        for url in ['/', '/machines/', '/tickets/', '/schedule/', '/analytics/', '/data/']:
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 200)
+
+    def test_admin_seed_is_repeatable_and_creates_no_business_data(self):
+        with patch.dict('os.environ', {'DJANGO_SUPERUSER_PASSWORD': 'FirstPassword!123'}):
+            call_command('seed_admin', username='admin', email='first@example.com', noinput=True, stdout=io.StringIO())
+        with patch.dict('os.environ', {'DJANGO_SUPERUSER_PASSWORD': 'ChangedPassword!456'}):
+            call_command('seed_admin', username='admin', email='other@example.com', noinput=True, stdout=io.StringIO())
+        admin = get_user_model().objects.get(username='admin')
+        self.assertEqual(get_user_model().objects.count(), 1)
+        self.assertTrue(admin.check_password('FirstPassword!123'))
+        self.assertEqual(admin.email, 'first@example.com')
+        from django.apps import apps
+        for model in apps.get_app_config('maintenance').get_models():
+            self.assertFalse(model.objects.exists(), model.__name__)
+
+    def test_admin_seed_does_not_promote_or_reactivate_existing_users(self):
+        user = get_user_model().objects.create_user('existing', password='OriginalPassword!123')
+        with patch.dict('os.environ', {'DJANGO_SUPERUSER_PASSWORD': 'AnotherPassword!456'}):
+            with self.assertRaises(CommandError):
+                call_command('seed_admin', username=user.username, noinput=True)
+        user.refresh_from_db()
+        self.assertFalse(user.is_superuser)
+        self.assertTrue(user.check_password('OriginalPassword!123'))
+        user.is_superuser = user.is_staff = True
+        user.is_active = False
+        user.save()
+        with self.assertRaises(CommandError):
+            call_command('seed_admin', username=user.username, noinput=True)
+        user.refresh_from_db()
+        self.assertFalse(user.is_active)
+
+    def test_admin_seed_requires_a_strong_password(self):
+        for password in ['', '12345678']:
+            with self.subTest(password_supplied=bool(password)):
+                with patch.dict('os.environ', {'DJANGO_SUPERUSER_PASSWORD': password}):
+                    with self.assertRaises(CommandError):
+                        call_command('seed_admin', username='admin', noinput=True)
+                self.assertFalse(get_user_model().objects.exists())
+
+    def test_admin_seed_prompts_and_requires_matching_confirmation(self):
+        with patch.dict('os.environ', {'DJANGO_SUPERUSER_PASSWORD': ''}), \
+                patch('sys.stdin.isatty', return_value=True):
+            with patch('getpass.getpass', side_effect=['FirstPassword!123', 'DifferentPassword!456']):
+                with self.assertRaises(CommandError):
+                    call_command('seed_admin', username='admin', stdout=io.StringIO())
+            self.assertFalse(get_user_model().objects.exists())
+            with patch('getpass.getpass', side_effect=['FirstPassword!123', 'FirstPassword!123']):
+                call_command('seed_admin', username='admin', stdout=io.StringIO())
+        self.assertTrue(get_user_model().objects.get(username='admin').check_password('FirstPassword!123'))

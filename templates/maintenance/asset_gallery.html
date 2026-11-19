@@ -1,0 +1,23 @@
+<section id="galeri-mesin" class="panel padded asset-gallery-panel">
+  <div class="section-heading"><h2>Galeri mesin</h2>{% if is_manager %}<a class="text-link" href="#tambah-foto">+ Tambah foto</a>{% endif %}</div>
+  {% with photos=asset.photos.all %}
+  {% if asset.gambar or photos %}
+  <div class="asset-gallery">
+    {% if asset.gambar %}<a class="gallery-photo" href="{% url 'asset_image' asset.asset_uid %}" target="_blank" rel="noopener" data-gallery-photo><img src="{% url 'asset_image' asset.asset_uid %}" alt="Foto utama {{ asset.nama_mesin }}"><span>Foto utama · Perbesar</span></a>{% endif %}
+    {% for photo in photos %}<a class="gallery-photo" href="{% url 'asset_photo' asset.asset_uid photo.pk %}" target="_blank" rel="noopener" data-gallery-photo><img src="{% url 'asset_photo' asset.asset_uid photo.pk %}" alt="Foto galeri {{ asset.nama_mesin }} — {{ forloop.counter }}" loading="lazy"><span>Foto {{ forloop.counter }} · Perbesar</span></a>{% endfor %}
+  </div>
+  {% else %}<div class="machine-placeholder"><i class="mdi mdi-camera-outline" aria-hidden="true"></i><span>Belum ada foto mesin</span></div>{% endif %}
+  {% endwith %}
+  {% if is_manager %}
+  <form id="tambah-foto" class="gallery-upload" method="post" enctype="multipart/form-data" action="{% url 'asset_photo_upload' asset.asset_uid %}#tambah-foto">
+    {% csrf_token %}{{ photo_form.non_field_errors }}
+    <div class="field"><label for="{{ photo_form.photos.id_for_label }}">{{ photo_form.photos.label }}</label>{{ photo_form.photos }}<div class="help-text">{{ photo_form.photos.help_text }}</div>{{ photo_form.photos.errors }}</div>
+    <button type="submit" class="btn btn-primary">Unggah foto</button>
+  </form>
+  {% endif %}
+</section>
+<dialog class="gallery-dialog" aria-label="Galeri foto mesin">
+  <div class="gallery-dialog-toolbar"><span data-gallery-counter aria-live="polite"></span><button type="button" class="btn btn-secondary" data-gallery-close>Tutup <span aria-hidden="true">×</span></button></div>
+  <figure><img data-gallery-image alt=""><figcaption data-gallery-caption></figcaption></figure>
+  <div class="gallery-dialog-nav"><button type="button" class="btn btn-secondary" data-gallery-prev>← Sebelumnya</button><button type="button" class="btn btn-secondary" data-gallery-next>Berikutnya →</button></div>
+</dialog>

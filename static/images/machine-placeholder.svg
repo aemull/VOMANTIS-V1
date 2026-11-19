@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="440" viewBox="0 0 640 440" fill="none">
+  <title>Ilustrasi mesin — foto belum tersedia</title>
+  <rect width="640" height="440" fill="#171B26"/>
+  <circle cx="320" cy="210" r="148" fill="#222737"/>
+  <path d="M130 334h380" stroke="#414A61" stroke-width="2" stroke-linecap="round"/>
+  <rect x="185" y="134" width="270" height="184" rx="16" fill="#30384D" stroke="#65708E" stroke-width="3"/>
+  <rect x="207" y="157" width="158" height="134" rx="8" fill="#191F2C" stroke="#65708E" stroke-width="2"/>
+  <path d="M286 158v43m-27 0h54l-10 24h-34l-10-24Z" stroke="#B4A1F5" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M227 268h118m-92-23h65v23h-65v-23Z" stroke="#8390B1" stroke-width="5" stroke-linejoin="round"/>
+  <rect x="385" y="160" width="49" height="39" rx="5" fill="#B4A1F5"/>
+  <path d="M396 179h27" stroke="#30384D" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="397" cy="220" r="6" fill="#5ED6A1"/>
+  <circle cx="422" cy="220" r="6" fill="#F1B66D"/>
+  <path d="M396 246h27m-27 14h27" stroke="#8390B1" stroke-width="4" stroke-linecap="round"/>
+  <path d="M204 318v15m232-15v15" stroke="#65708E" stroke-width="10"/>
+</svg>

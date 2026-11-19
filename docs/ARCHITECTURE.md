@@ -49,5 +49,5 @@ Laporan berisi minimal satu kartu, maksimal 20 kartu. Bukti sebelum/sesudah dan 
 - Pengukuran KPI, downtime, dan histori kerusakan dapat ditambah melalui Data & arsip. KPI belum menarik jam operasi dari sensor; durasi downtime tidak disamakan secara otomatis dengan lama tiket terbuka.
 - Penjadwalan belum memperhitungkan shift dan kalender produksi; satu tiket aktif terkonfirmasi per teknisi per hari adalah aturan benturan MVP.
 - Upload video memakai signature container dan ekstensi, bukan transcoding atau pemeriksaan malware. Batas request server produksi perlu menyesuaikan jumlah lampiran.
-- SQLite digunakan sementara; diperlukan evaluasi concurrency dan migrasi database ketika volume penulisan meningkat.
+- MariaDB menjadi database utama. Generated column tanggal aktif dan unique constraint melindungi slot teknisi, termasuk untuk pembaruan langsung di database. Deployment Debian memakai Gunicorn, Nginx, dan systemd timer; lihat ../DEPLOYMENT.md.
 - AI untuk rekomendasi jadwal dan diagnosis merupakan fitur masa depan, tidak disimulasikan sebagai hasil nyata.

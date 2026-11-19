@@ -1,6 +1,6 @@
 from django.apps import apps
 from django.contrib import admin
-from .models import Asset, WorkOrder, MaintenanceReport, ActionCard, Attachment, TicketEvent, SourceArchive, SourceRecord
+from .models import Asset, AssetPhoto, WorkOrder, MaintenanceReport, ActionCard, Attachment, TicketEvent, SourceArchive, SourceRecord
 
 
 class PreserveDataAdmin(admin.ModelAdmin):
@@ -28,7 +28,7 @@ class ReadOnlyAdmin(PreserveDataAdmin):
 for model in apps.get_app_config('maintenance').get_models():
     if model == Asset:
         continue
-    if model in [WorkOrder, MaintenanceReport, ActionCard, Attachment, TicketEvent, SourceArchive, SourceRecord]:
+    if model in [AssetPhoto, WorkOrder, MaintenanceReport, ActionCard, Attachment, TicketEvent, SourceArchive, SourceRecord]:
         admin.site.register(model, ReadOnlyAdmin)
     else:
         admin.site.register(model, PreserveDataAdmin)

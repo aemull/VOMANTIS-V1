@@ -17,9 +17,9 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from .access import is_manager, manager_required, visible_tickets
-from .forms import AssetForm, WorkOrderForm, ReportForm, CardFormSet, ReviewForm, StyledForm
+from .forms import AssetForm, AssetPhotoForm, WorkOrderForm, ReportForm, CardFormSet, ReviewForm, StyledForm
 from .models import (Asset, WorkOrder, MaintenanceReport, Attachment, TicketEvent, FailureHistory,
-                     Downtime, KPI, IndicatorFormula, SourceArchive, PMSchedule)
+                     Downtime, KPI, IndicatorFormula, SourceArchive, PMSchedule, AssetPhoto)
 from .services import generate_monthly, start_ticket, review_ticket, add_attachment, report_snapshot
 
 
@@ -45,7 +45,7 @@ def dashboard(request):
 
 @login_required
 def asset_list(request):
-    assets = Asset.objects.all()
+    assets = Asset.objects.prefetch_related('photos').all()
     query = request.GET.get('q', '').strip()
     if query:
         assets = assets.filter(Q(nama_mesin__icontains=query) | Q(asset_uid__icontains=query) | Q(kode_asset__icontains=query) | Q(serial_number__icontains=query) | Q(lokasi__icontains=query))
@@ -56,9 +56,14 @@ def asset_list(request):
 
 @login_required
 def asset_detail(request, uid):
-    asset = get_object_or_404(Asset, asset_uid=uid)
+    asset = get_object_or_404(Asset.objects.prefetch_related('photos'), asset_uid=uid)
+    return render_asset_detail(request, asset)
+
+
+def render_asset_detail(request, asset, photo_form=None):
     tickets = visible_tickets(request.user).filter(asset=asset)
     return render(request, 'maintenance/asset_detail.html', {'title': asset.nama_mesin, 'active_nav': 'assets', 'asset': asset,
+                  'photo_form': photo_form if photo_form is not None else AssetPhotoForm(),
                   'tickets': tickets, 'fields': [(f.verbose_name.replace('_', ' ').capitalize(), f.value_from_object(asset)) for f in Asset._meta.fields if f.name not in ['gambar', 'id_asset', 'is_demo']]})
 
 
@@ -67,10 +72,48 @@ def asset_edit(request, uid=None):
     asset = get_object_or_404(Asset, asset_uid=uid) if uid else None
     form = AssetForm(request.POST or None, request.FILES or None, instance=asset)
     if request.method == 'POST' and form.is_valid():
-        asset = form.save()
+        with transaction.atomic():
+            asset = form.save()
+            save_asset_photos(asset, form.cleaned_data['photos'])
         messages.success(request, 'Data mesin tersimpan. ID unik dan riwayat tetap dipertahankan.')
         return redirect('asset_detail', uid=asset.asset_uid)
     return render(request, 'maintenance/form.html', {'title': 'Edit mesin' if asset else 'Tambah mesin', 'form': form, 'active_nav': 'assets'})
+
+
+def save_asset_photos(asset, files):
+    stored = []
+    try:
+        with transaction.atomic():
+            for file in files:
+                photo = AssetPhoto(asset=asset)
+                photo.image.save(file.name, file, save=False)
+                stored.append(photo.image)
+                photo.save()
+    except Exception:
+        for image in stored:
+            image.delete(save=False)
+        raise
+
+
+@manager_required
+@require_POST
+def asset_photo_upload(request, uid):
+    asset = get_object_or_404(Asset.objects.prefetch_related('photos'), asset_uid=uid)
+    form = AssetPhotoForm(request.POST, request.FILES)
+    if form.is_valid():
+        save_asset_photos(asset, form.cleaned_data['photos'])
+        messages.success(request, 'Foto ditambahkan ke galeri mesin.')
+        return redirect(reverse('asset_detail', args=[uid]) + '#galeri-mesin')
+    return render_asset_detail(request, asset, form)
+
+
+@login_required
+def asset_photo(request, uid, photo_id):
+    photo = get_object_or_404(AssetPhoto, pk=photo_id, asset__asset_uid=uid)
+    response = FileResponse(photo.image.open('rb'))
+    response['Cache-Control'] = 'private, no-store'
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 
 @manager_required

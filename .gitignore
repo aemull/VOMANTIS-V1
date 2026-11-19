@@ -8,6 +8,10 @@ staticfiles/
 .env
 *.log
 artifacts/browser-*.png
+artifacts/mariadb-test/
+artifacts/migration-source.sqlite3
+artifacts/vomantis-data.json.gz
+artifacts/pre-fresh-backup/
 ss_fitur
 docs
 PRD.md 

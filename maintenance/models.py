@@ -56,6 +56,15 @@ class Asset(models.Model):
         return f'{self.asset_uid} · {self.nama_mesin}'
 
 
+class AssetPhoto(models.Model):
+    asset = models.ForeignKey(Asset, on_delete=models.PROTECT, related_name='photos')
+    image = models.ImageField('Foto mesin', upload_to='machines/gallery/%Y/%m/')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'pk']
+
+
 class InitialCondition(models.Model):
     id_kondisi = models.AutoField(primary_key=True)
     tanggal = models.DateField()
@@ -99,13 +108,21 @@ class WorkOrder(models.Model):
     confirmed = models.BooleanField('Jadwal dikonfirmasi', default=False)
     monthly_key = models.CharField(max_length=60, unique=True, blank=True, null=True, editable=False)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, blank=True, null=True, related_name='created_tickets')
+    # NULL releases the reservation; MariaDB does not support partial unique indexes.
+    # Virtual storage also allows migrating a populated legacy SQLite database.
+    active_scheduled_date = models.GeneratedField(
+        expression=models.Case(
+            models.When(confirmed=True, status__in=['Open', 'Proses', 'Review', 'Revisi'], then=F('scheduled_date')),
+            default=Value(None), output_field=models.DateField(),
+        ),
+        output_field=models.DateField(), db_persist=False, null=True,
+    )
 
     class Meta:
         db_table = 'work_order'
         ordering = ['scheduled_date', '-tanggal_jam_lapor']
         constraints = [models.UniqueConstraint(
-            fields=['assigned_to', 'scheduled_date'],
-            condition=models.Q(confirmed=True, status__in=['Open', 'Proses', 'Review', 'Revisi']),
+            fields=['assigned_to', 'active_scheduled_date'],
             name='unique_active_technician_day',
         )]
 

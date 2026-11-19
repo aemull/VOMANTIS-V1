@@ -30,6 +30,7 @@
       <div class="account-actions"><a href="{% url 'password_change' %}">Ubah password</a><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link-button" type="submit">Keluar <i class="mdi mdi-logout" aria-hidden="true"></i></button></form></div>
     </div>
   </aside>
+  <button type="button" class="menu-backdrop" aria-label="Tutup menu" tabindex="-1"></button>
   <div class="app-body">
     <header class="app-header"><button id="menu-toggle" class="icon-button mobile-menu" aria-label="Buka menu" aria-expanded="false" aria-controls="app-sidebar"><i class="mdi mdi-menu" aria-hidden="true"></i></button><div class="breadcrumb-line"><strong>{{ title|default:'Pengaturan akun' }}</strong></div><div class="header-right"><span class="desktop-only">{% now 'l, d M Y' %}</span>{% if is_manager %}<a class="notification-link" href="{% url 'ticket_list' %}?status=Review" aria-label="{{ review_count }} laporan menunggu review"><i class="mdi mdi-bell-outline" aria-hidden="true"></i>{% if review_count %}<b>{{ review_count }}</b>{% endif %}</a>{% endif %}</div></header>
     <main id="main" class="app-main">

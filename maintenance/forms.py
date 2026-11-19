@@ -41,10 +41,46 @@ class StyledForm:
                 field.widget = forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'})
 
 
+class MultipleImageInput(forms.FileInput):
+    allow_multiple_selected = True
+
+
+class MultipleImageField(forms.ImageField):
+    widget = MultipleImageInput
+
+    def clean(self, data, initial=None):
+        if not data:
+            super().clean(None, initial)
+            return []
+        files = data if isinstance(data, (list, tuple)) else [data]
+        if len(files) > 10:
+            raise ValidationError('Pilih maksimal 10 foto dalam satu unggahan.')
+        if sum(file.size for file in files) > 100 * 1024 * 1024:
+            raise ValidationError('Total ukuran foto maksimal 100 MB per unggahan.')
+        cleaned = []
+        for file in files:
+            if Path(file.name).suffix.lower() not in ['.jpg', '.jpeg', '.png', '.webp']:
+                raise ValidationError('Foto mesin harus berupa JPG, PNG, atau WebP.')
+            cleaned.append(super().clean(file, initial))
+            validate_evidence(cleaned[-1])
+        return cleaned
+
+
+class AssetPhotoForm(StyledForm, forms.Form):
+    photos = MultipleImageField(label='Tambah foto mesin', help_text='JPG, PNG, WebP. Maksimal 10 foto sekaligus, 25 MB per foto, total 100 MB.',
+                               widget=MultipleImageInput(attrs={'accept': '.jpg,.jpeg,.png,.webp'}))
+
+
 class AssetForm(StyledForm, forms.ModelForm):
+    photos = MultipleImageField(label='Foto galeri tambahan', required=False,
+                               help_text='Pilih beberapa foto sekaligus. Maksimal 10 foto, 25 MB per foto, total 100 MB.',
+                               widget=MultipleImageInput(attrs={'accept': '.jpg,.jpeg,.png,.webp'}))
+
     class Meta:
         model = Asset
         exclude = ['asset_uid', 'is_demo']
+        labels = {'gambar': 'Foto utama'}
+        help_texts = {'gambar': 'Ditampilkan pada kartu mesin. Foto tambahan dapat diunggah ke galeri.'}
 
     def clean_serial_number(self):
         return self.cleaned_data.get('serial_number') or None

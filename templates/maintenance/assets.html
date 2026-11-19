@@ -1,5 +1,24 @@
-{% extends 'base.html' %}{% block content %}
+{% extends 'base.html' %}{% load static %}{% block content %}
+{% static 'images/machine-placeholder.svg' as machine_placeholder %}
 <div class="page-heading"><div><h1>Master mesin</h1></div>{% if is_manager %}<a class="btn btn-primary" href="{% url 'asset_create' %}">+ Tambah mesin</a>{% endif %}</div>
-<section class="panel"><form method="get" class="filter-bar"><label class="search-field"><i class="mdi mdi-magnify"></i><input aria-label="Cari mesin" name="q" value="{{ request.GET.q }}" placeholder="Cari nama, ID, serial, atau lokasi…" class="form-control"></label><select name="status" aria-label="Status mesin" class="form-control"><option value="">Semua status</option>{% for value,label in statuses %}<option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select><button class="btn btn-secondary">Terapkan</button><a class="text-link" href="{% url 'asset_list' %}">Reset</a></form>
-<div class="table-responsive"><table class="table app-table"><thead><tr><th>Mesin / ID unik</th><th>Serial & kode lama</th><th>Lokasi</th><th>Kondisi</th><th>Status</th><th></th></tr></thead><tbody>{% for asset in page_obj %}<tr><td><a href="{% url 'asset_detail' asset.asset_uid %}" class="table-title">{{ asset.nama_mesin }}</a><small>{{ asset.asset_uid }} {% if asset.is_demo %}<span class="demo-tag">DEMO</span>{% endif %}</small></td><td>{{ asset.serial_number|default:'—' }}<small>{{ asset.kode_asset }}</small></td><td>{{ asset.lokasi|default:'—' }}</td><td><span class="badge {% if asset.kondisi == 'Baik' %}green{% else %}orange{% endif %}">{{ asset.kondisi }}</span></td><td>{{ asset.status }}</td><td><a class="text-link" href="{% url 'asset_detail' asset.asset_uid %}">Detail ↗</a></td></tr>{% empty %}<tr><td colspan="6" class="empty-state"><i class="mdi mdi-cube-outline"></i><h3>Belum ada mesin yang cocok</h3><p>Tambahkan mesin baru atau ubah pencarian Anda.</p></td></tr>{% endfor %}</tbody></table></div>{% include 'maintenance/pagination.html' %}</section>
+<section class="panel"><form method="get" class="filter-bar"><label class="search-field"><i class="mdi mdi-magnify"></i><input aria-label="Cari mesin" name="q" value="{{ request.GET.q }}" placeholder="Cari nama, ID, serial, atau lokasi…" class="form-control"></label><select name="status" aria-label="Status mesin" class="form-control"><option value="">Semua status</option>{% for value,label in statuses %}<option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select><button class="btn btn-secondary">Terapkan</button><a class="text-link" href="{% url 'asset_list' %}">Reset</a></form></section>
+<div class="asset-grid asset-bento" aria-label="Daftar mesin">
+{% for asset in page_obj %}
+<article class="asset-card">
+  <a class="asset-card-cover" href="{% url 'asset_detail' asset.asset_uid %}" aria-label="Lihat {{ asset.nama_mesin }}">
+    {% if asset.gambar %}<img src="{% url 'asset_image' asset.asset_uid %}" alt="{{ asset.nama_mesin }}" loading="lazy" data-fallback-src="{{ machine_placeholder }}">
+    {% else %}{% with photo=asset.photos.all|first %}{% if photo %}<img src="{% url 'asset_photo' asset.asset_uid photo.pk %}" alt="{{ asset.nama_mesin }}" loading="lazy" data-fallback-src="{{ machine_placeholder }}">{% else %}<img src="{{ machine_placeholder }}" alt="Ilustrasi mesin: foto {{ asset.nama_mesin }} belum tersedia" loading="lazy" width="640" height="440">{% endif %}{% endwith %}{% endif %}
+  </a>
+  <div class="asset-card-content">
+    <div class="asset-card-badges"><span class="badge {% if asset.kondisi == 'Baik' %}green{% else %}orange{% endif %}">{{ asset.kondisi }}</span><span class="asset-status">{{ asset.status }}</span></div>
+    <h2><a href="{% url 'asset_detail' asset.asset_uid %}">{{ asset.nama_mesin }}</a></h2>
+    <p class="asset-card-id">{{ asset.asset_uid }} {% if asset.is_demo %}<span class="demo-tag">DEMO</span>{% endif %}</p>
+    <p class="asset-location"><i class="mdi mdi-map-marker-outline" aria-hidden="true"></i> {{ asset.lokasi|default:'Lokasi belum diisi' }}</p>
+    <dl class="asset-card-fields"><div><dt>Serial</dt><dd>{{ asset.serial_number|default:'—' }}</dd></div><div><dt>Kode aset</dt><dd>{{ asset.kode_asset }}</dd></div></dl>
+    <a class="btn btn-secondary" href="{% url 'asset_detail' asset.asset_uid %}">Detail mesin <span aria-hidden="true">&rarr;</span></a>
+  </div>
+</article>
+{% empty %}<div class="empty-state asset-grid-empty"><i class="mdi mdi-cube-outline" aria-hidden="true"></i><h3>Belum ada mesin yang cocok</h3><p>Tambahkan mesin baru atau ubah pencarian Anda.</p></div>{% endfor %}
+</div>
+{% include 'maintenance/pagination.html' %}
 {% endblock %}

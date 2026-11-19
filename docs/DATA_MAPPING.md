@@ -1,10 +1,10 @@
 # Pemetaan data VOMANTIS
 
-Seluruh tabel dan kolom `Main_data.sql` tersedia di SQLite. Data tambahan menggunakan kolom atau tabel baru. SQL asli diarsipkan sebagai byte, sehingga komentar, struktur MySQL, dan isi Unicode tetap dapat dipulihkan persis.
+Seluruh tabel dan kolom `Main_data.sql` tersedia di MariaDB. Data tambahan menggunakan kolom atau tabel baru. SQL asli diarsipkan sebagai byte, sehingga komentar, struktur MySQL, dan isi Unicode tetap dapat dipulihkan persis.
 
 ## Tabel sumber
 
-| Tabel SQLite / MySQL asal | Model Django | Isi sumber | Penggunaan |
+| Tabel MariaDB / MySQL asal | Model Django | Isi sumber | Penggunaan |
 | --- | --- | ---: | --- |
 | `master_asset` | `Asset` | 0 | Master mesin, serial, lokasi, kondisi, metadata sumber |
 | `kondisi_awal` | `InitialCondition` | 0 | Checklist komponen dan kondisi awal |
@@ -29,9 +29,9 @@ SHA-256 file yang digunakan saat implementasi:
 1949e796471c10a1fcf223b601d7367912b2aaa41c0e2f30c953e3d4f2c2dc16
 ```
 
-## Adaptasi untuk SQLite
+## Adaptasi untuk MariaDB
 
-- `AUTO_INCREMENT` dipetakan ke primary key integer Django/SQLite; primary key sumber tetap dipakai jika tercantum dalam INSERT.
+- `AUTO_INCREMENT` dipetakan ke primary key integer Django/MariaDB; primary key sumber tetap dipakai jika tercantum dalam INSERT.
 - `ENUM` dipetakan ke field dengan pilihan tervalidasi pada form/model. Tidak ada nilai sumber yang dikurangi.
 - `DECIMAL` menggunakan DecimalField. Angka finansial disimpan sampai dua angka desimal.
 - Datetime sumber tanpa zona waktu ditafsirkan sebagai Asia/Jakarta dan dikelola dengan dukungan timezone Django.
@@ -59,7 +59,7 @@ Kode aset lama **tidak dibuat unik**. Dua unit dengan kode lama sama tetap menja
 
 ## Pemeriksaan integritas
 
-`verify_source_data` membaca ulang arsip, memverifikasi SHA-256, memastikan seluruh kolom SQL memiliki pemetaan model, membandingkan snapshot tiap baris, dan memastikan objek hasil impor masih ada. Test otomatis juga membandingkan kolom SQL dengan `PRAGMA table_xinfo` SQLite, termasuk kolom turunan.
+`verify_source_data` membaca ulang arsip, memverifikasi SHA-256, memastikan seluruh kolom SQL memiliki pemetaan model, membandingkan snapshot tiap baris, dan memastikan objek hasil impor masih ada. Test otomatis juga membandingkan kolom SQL lewat introspeksi database Django, termasuk kolom turunan, pada MariaDB maupun SQLite untuk uji kompatibilitas.
 
 `import_main_data` bersifat transaksional: konflik atau struktur yang tidak didukung membatalkan keseluruhan impor. Mengimpor file identik kembali hanya memverifikasi arsip yang sudah tersedia. Penambahan dump lain dengan ID yang bentrok tidak ditimpa atau diabaikan secara diam-diam.
 
