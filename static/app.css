@@ -251,28 +251,37 @@ select.form-control { height: 48px; }
   .data-tabs, .filter-bar { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* Image-led machine cards and multi-photo gallery. */
-.asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 24px; padding: 0; margin-bottom: 24px; }
-.asset-card { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--border); border-radius: 18px; background: var(--raised); overflow: hidden; }
-.asset-card-cover { display: block; position: relative; height: 220px; flex: 0 0 220px; overflow: hidden; background: #171b26; }
-.asset-card-cover img { display: block; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
-.asset-no-photo { display: flex; height: 100%; align-items: center; justify-content: center; flex-direction: column; gap: 12px; color: var(--muted); font-size: 13px; }
-.asset-no-photo i { font-size: 48px; color: var(--accent); }
-.asset-card-content { display: flex; flex: 1; flex-direction: column; gap: 16px; padding: 22px; overflow-wrap: anywhere; }
-.asset-card-badges { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-.asset-status { font-size: 12px; color: var(--muted); }
-.asset-card-content h2 { font-size: 19px; line-height: 1.4; margin: 0; }
-.asset-card-id, .asset-location { margin: 0; font-size: 13px; color: var(--muted); }
-.asset-card-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding-top: 16px; border-top: 1px solid var(--border); margin: 0 0 4px; }
-.asset-card-fields dt { font-size: 11px; font-weight: 400; color: var(--muted); }
-.asset-card-fields dd { font-size: 13px; margin: 6px 0 0; }
-.asset-card-content > .btn { margin-top: auto; justify-content: space-between; }
-.asset-grid-empty { grid-column: 1 / -1; }
+/* Square machine cards. */
+.asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); justify-items: center; gap: 20px; margin-bottom: 24px; }
+.asset-card { position: relative; align-self: start; width: 100%; max-width: 360px; aspect-ratio: 1 / 1; border: 1px solid var(--border); border-radius: 20px; background: var(--raised); overflow: hidden; }
+.asset-card:hover, .asset-card:focus-within { border-color: var(--accent); }
+.asset-card-link { position: absolute; inset: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; color: var(--text); }
+.asset-card-link:hover { color: var(--text); }
+.asset-card-link:focus-visible { outline-offset: -4px; }
+.asset-card-media { position: relative; display: grid; grid-template-rows: minmax(0, 1fr); place-items: center; padding: 12px; background: radial-gradient(ellipse at center, #252a38, var(--surface)); }
+.asset-card-cover { display: block; width: auto; height: 100%; aspect-ratio: 1 / 1; object-fit: cover; border: 1px solid var(--border); border-radius: 12px; }
+.asset-card-badges { position: absolute; inset: 12px 12px auto; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.asset-status { padding: 5px 8px; border-radius: 6px; font-size: 11px; color: var(--text); background: #131722ed; }
+.asset-card-content { display: grid; gap: 4px; padding: 12px 14px; border-top: 1px solid var(--border); background: var(--surface); }
+.asset-card-heading, .asset-card-meta { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.asset-card-heading { justify-content: space-between; }
+.asset-card-heading h2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; min-width: 0; margin: 0; overflow: hidden; overflow-wrap: anywhere; font-size: 18px; line-height: 1.25; }
+.asset-card-arrow { flex-shrink: 0; color: var(--accent); font-size: 20px; line-height: 1; }
+.asset-card-id, .asset-location, .asset-card-fields dd { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asset-card-id, .asset-location { font-size: 12px; color: var(--muted); }
+.asset-card-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding-top: 6px; border-top: 1px solid var(--border); margin: 2px 0 0; }
+.asset-card-fields dt { font-size: 10px; font-weight: 400; color: var(--muted); }
+.asset-card-fields dd { font-size: 12px; }
+.asset-grid-empty { grid-column: 1 / -1; justify-self: stretch; }
+
+/* Multi-photo gallery on the machine detail page. */
 .asset-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 16px; }
+.gallery-item { min-width: 0; }
+.gallery-item:first-child { grid-column: 1 / -1; }
+.gallery-item form { margin-top: 8px; }
 .gallery-photo { display: block; min-width: 0; border: 1px solid var(--border); border-radius: 14px; background: #11141c; overflow: hidden; }
-.gallery-photo:first-child { grid-column: 1 / -1; }
 .gallery-photo img { display: block; width: 100%; height: 180px; object-fit: cover; }
-.gallery-photo:first-child img { height: clamp(220px, 40vw, 440px); object-fit: contain; }
+.gallery-item:first-child .gallery-photo img { height: clamp(220px, 40vw, 440px); object-fit: contain; }
 .gallery-photo > span { display: block; padding: 10px 14px; font-size: 12px; color: var(--muted); }
 .gallery-upload { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 20px; margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border); }
 .gallery-upload > .btn { align-self: center; }
@@ -282,9 +291,9 @@ select.form-control { height: 48px; }
 .gallery-dialog figure { margin: 16px 0; }
 .gallery-dialog figure img { display: block; width: 100%; height: 60vh; height: 60dvh; object-fit: contain; background: #101116; border-radius: 12px; }
 .gallery-dialog figcaption { padding-top: 12px; font-size: 13px; overflow-wrap: anywhere; }
+.evidence-remove { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 @media (max-width: 680px) {
-  .asset-grid { padding: 0; gap: 16px; grid-template-columns: minmax(0, 1fr); }
-  .asset-card-content { padding: 18px; }
+  .asset-grid { gap: 16px; }
   .asset-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .gallery-photo img { height: 120px; }
   .gallery-upload { grid-template-columns: minmax(0, 1fr); gap: 16px; }
@@ -292,49 +301,4 @@ select.form-control { height: 48px; }
   .gallery-dialog { padding: 14px; }
   .gallery-dialog .btn { min-width: 0; white-space: normal; padding: 10px; font-size: 13px; }
   .gallery-dialog figure img { height: 55vh; height: 55dvh; }
-}
-
-/* Master mesin: repeating bento composition, one tile per machine. */
-.asset-bento {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
-  align-items: stretch;
-}
-.asset-bento .asset-card {
-  border-radius: 24px;
-  background: linear-gradient(150deg, #252a38, var(--surface));
-  box-shadow: 0 6px 24px #0002;
-  transition: border-color .18s ease, box-shadow .18s ease;
-}
-.asset-bento .asset-card:hover,
-.asset-bento .asset-card:focus-within {
-  border-color: #8272ad;
-  box-shadow: 0 8px 28px #0003;
-}
-.asset-bento .asset-card-cover { margin: 12px 12px 0; border-radius: 16px; }
-.asset-bento .asset-card-content { padding: 20px; gap: 14px; }
-.asset-bento .asset-card-fields { border: 0; padding: 0; gap: 10px; }
-.asset-bento .asset-card-fields > div {
-  min-width: 0;
-  border: 1px solid #ffffff08;
-  border-radius: 12px;
-  padding: 12px;
-  background: #11141c70;
-}
-.asset-bento .asset-location { padding: 12px; border-radius: 12px; background: #11141c70; }
-.asset-bento .asset-card-content > .btn { border-radius: 12px; }
-.asset-bento .asset-status { padding: 5px 9px; border-radius: 8px; background: #ffffff06; }
-@media (min-width: 1280px) {
-  .asset-bento { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .asset-bento .asset-card:nth-child(5n + 1) { grid-column: span 2; }
-  .asset-bento .asset-card:nth-child(5n + 1) .asset-card-content h2 { font-size: 23px; }
-}
-@media (max-width: 680px) {
-  .asset-bento { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .asset-bento .asset-card { border-radius: 20px; }
-  .asset-bento .asset-card-content { padding: 16px; }
-  .asset-bento .asset-card-cover { margin: 10px 10px 0; border-radius: 12px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .asset-bento .asset-card { transition: none; }
 }

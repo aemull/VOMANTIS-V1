@@ -102,11 +102,10 @@ Instalasi bersih membuat skema database, grup Manager/Teknisi, dan satu akun adm
 
 ## 3. Pengaturan akun
 
-1. Masuk ke `http://127.0.0.1:8000/admin/` memakai superuser yang dibuat dengan `seed_admin`.
-2. Tambahkan akun pada menu **Users** dan atur password.
-3. Untuk Manager, masukkan akun ke grup **Manager**. Aktifkan **Staff status** hanya jika perlu membuka Django Admin.
-4. Untuk teknisi, masukkan akun ke grup **Teknisi**. Teknisi harus aktif agar muncul pada pilihan penugasan.
-5. Pengguna masuk melalui `/login/`. Password dapat diganti dari menu **Ubah password**.
+1. Masuk ke VOMANTIS sebagai Manager atau superuser yang dibuat dengan `seed_admin`.
+2. Buka **Akun tim → Tambah akun**. Isi nama lengkap, username, peran **Manager** atau **Teknisi**, dan password awal.
+3. Akun Manager dapat meninjau tiket dan laporan. Akun Teknisi aktif langsung tersedia di pilihan penugasan.
+4. Pengguna masuk melalui `/login/`. Password dapat diganti dari menu **Ubah password**. Pengaturan akun juga tersedia bagi superuser melalui Django Admin.
 
 Superuser diperlakukan sebagai Manager pada aplikasi. Teknisi hanya dapat melihat tiket yang ditugaskan kepadanya, termasuk lampiran tiket tersebut. Informasi master mesin tersedia bagi semua pengguna yang sudah login.
 
@@ -116,11 +115,11 @@ Superuser diperlakukan sebagai Manager pada aplikasi. Teknisi hanya dapat meliha
 
 1. **Master mesin → Tambah mesin.** Isi kode lama, nama, serial bila tersedia, kategori, lokasi, kondisi, foto, dan tanggal acuan maintenance.
 2. Setiap mesin mendapat `asset_uid` unik yang tidak dapat diedit. Kode aset lama boleh berulang karena tetap diperlukan untuk pelacakan data lama. Serial yang diisi harus unik.
-3. Buka detail mesin untuk informasi, riwayat, dan unduhan QR. Tombol **Nonaktifkan / Afkir** mengubah status tanpa menghapus data.
+3. Buka detail mesin untuk informasi, riwayat, dan unduhan QR. Di **Galeri mesin**, gunakan **Hapus foto** pada foto yang dipilih. **Nonaktifkan / Afkir** mengubah status mesin. **Hapus aset** mengeluarkan aset dari Master mesin dan penjadwalan baru sambil mempertahankan riwayatnya.
 4. Buka **Jadwal maintenance**, pilih bulan, lalu buat jadwal bulanan; atau buat **Work order** korektif secara manual.
-5. Buka tiket → **Atur penugasan**. Tentukan teknisi, tanggal, prioritas, tingkat kerusakan, dan centang **Jadwal dikonfirmasi**.
+5. Buka tiket → **Atur penugasan**. Tentukan teknisi, tanggal, prioritas, tingkat kerusakan, dan centang **Setujui jadwal dan penugasan**. Gunakan **Tolak work order** dengan alasan untuk menolak tiket yang belum disetujui.
 6. Ikuti progres pada kanban atau daftar tiket. Indikator lonceng menampilkan jumlah laporan berstatus **Review**; notifikasi bersifat di dalam aplikasi.
-7. Buka laporan, periksa setiap kartu dan lampiran, lalu setujui atau kembalikan dengan catatan revisi.
+7. Buka laporan, periksa setiap kartu dan lampiran, lalu setujui atau kembalikan dengan catatan revisi. **Jejak aktivitas** menampilkan nama Manager yang mengambil keputusan dan waktu keputusan.
 
 ### Teknisi
 
@@ -128,9 +127,9 @@ Superuser diperlakukan sebagai Manager pada aplikasi. Teknisi hanya dapat meliha
 2. Buka tiket terkonfirmasi → **Mulai pekerjaan**.
 3. Pilih **Isi laporan maintenance**. Isi kondisi sebelum, kondisi setelah, dan hasil pemeriksaan mesin.
 4. Unggah bukti sebelum/sesudah. Tambahkan kartu untuk setiap komponen atau titik kerusakan, lengkap dengan temuan, tindakan, bukti kerusakan, dan bukti perbaikan.
-5. Kirim laporan untuk review. Jika dikembalikan, baca catatan Manager, perbaiki laporan, lalu kirim kembali.
+5. Kirim laporan untuk review. Jika dikembalikan, baca catatan Manager dan perbaiki laporan. Tandai **Hapus foto** pada foto yang akan dikeluarkan saat revisi dikirim. Unggah pengganti jika foto itu satu-satunya bukti untuk tahap tersebut.
 
-Format lampiran: JPG, JPEG, PNG, WebP, MP4, atau WebM; maksimal **25 MB per berkas**, maksimal **20 kartu** per laporan. Foto diverifikasi dengan Pillow, video diperiksa ekstensi dan signature container. Lampiran hanya dapat dibuka setelah login dan pemeriksaan hak akses. Lampiran sebelumnya tidak dihapus saat revisi. Setiap pengiriman laporan menyimpan snapshot isi kartu dan daftar lampiran dalam jejak aktivitas.
+Format lampiran: JPG, JPEG, PNG, WebP, MP4, atau WebM. Maksimal **25 MB per berkas** dan **20 kartu** per laporan. Foto diverifikasi dengan Pillow, video diperiksa ekstensi dan signature container. Lampiran hanya dapat dibuka setelah login dan pemeriksaan hak akses. Foto yang dikeluarkan dari laporan disimpan sebagai arsip audit. Setiap pengiriman laporan menyimpan snapshot isi kartu dan daftar lampiran dalam jejak aktivitas.
 
 ## 5. Penjadwalan bulanan otomatis
 
@@ -179,7 +178,7 @@ Instalasi fresh tidak mengimpor SQL lama. Fitur impor tetap tersedia secara manu
 - Byte asli SQL, SHA-256, ringkasan tabel, serta snapshot tiap baris impor disimpan dalam database.
 - Impor berulang terhadap file yang sama tidak menambah duplikat. Konflik primary key dengan isi berbeda membatalkan seluruh impor, tanpa menimpa data.
 - Parser membaca `CREATE TABLE` dan literal `INSERT ... VALUES`; SQL sumber tidak dieksekusi langsung. Pernyataan tidak didukung ditolak agar data tidak terlewat diam-diam.
-- Penghapusan fisik dinonaktifkan pada aplikasi dan Django Admin. Relasi historis dilindungi dengan `PROTECT`.
+- Penghapusan aset dari Master mesin menyimpan baris aset untuk kebutuhan riwayat dan verifikasi arsip. Relasi historis dilindungi dengan `PROTECT`.
 
 ```powershell
 .\.venv\Scripts\python.exe manage.py import_main_data

@@ -1,10 +1,12 @@
 from pathlib import Path
 from django import forms
+from django.contrib.auth import get_user_model
+from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
 from django.forms import inlineformset_factory
 from PIL import Image
 from .access import technicians
-from .models import Asset, WorkOrder, MaintenanceReport, ActionCard
+from .models import Asset, WorkOrder, MaintenanceReport, ActionCard, Attachment
 
 
 def validate_evidence(file):
@@ -39,6 +41,16 @@ class StyledForm:
                 field.widget.attrs['rows'] = 3
             if isinstance(field, forms.DateField) and not isinstance(field, forms.DateTimeField):
                 field.widget = forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'})
+
+
+class TeamAccountForm(StyledForm, UserCreationForm):
+    first_name = forms.CharField(label='Nama lengkap', max_length=100)
+    role = forms.ChoiceField(label='Peran', choices=[('Teknisi', 'Teknisi'), ('Manager', 'Manager')])
+    field_order = ['first_name', 'username', 'role', 'password1', 'password2']
+
+    class Meta(UserCreationForm.Meta):
+        model = get_user_model()
+        fields = ['username', 'first_name']
 
 
 class MultipleImageInput(forms.FileInput):
@@ -96,11 +108,15 @@ class WorkOrderForm(StyledForm, forms.ModelForm):
     class Meta:
         model = WorkOrder
         fields = ['asset', 'jenis', 'prioritas', 'severity', 'scheduled_date', 'assigned_to', 'confirmed', 'keluhan_gejala', 'spare_part', 'biaya']
-        labels = {'asset': 'Mesin', 'assigned_to': 'Teknisi yang ditugaskan', 'keluhan_gejala': 'Keluhan / instruksi kerja'}
+        labels = {'asset': 'Mesin', 'assigned_to': 'Teknisi yang ditugaskan', 'keluhan_gejala': 'Keluhan / instruksi kerja',
+                  'confirmed': 'Setujui jadwal dan penugasan'}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['asset'].queryset = Asset.objects.exclude(status='Afkir')
+        assets = Asset.objects.in_master().exclude(status='Afkir')
+        if self.instance.asset_id:
+            assets = assets | Asset.objects.filter(pk=self.instance.asset_id)
+        self.fields['asset'].queryset = assets
         self.fields['assigned_to'].queryset = technicians()
         self.fields['keluhan_gejala'].required = True
 
@@ -121,6 +137,14 @@ class WorkOrderForm(StyledForm, forms.ModelForm):
 class ReportForm(StyledForm, forms.ModelForm):
     before_file = forms.FileField(label='Foto / video kondisi sebelum', required=False, validators=[validate_evidence])
     after_file = forms.FileField(label='Foto / video kondisi sesudah', required=False, validators=[validate_evidence])
+    remove_photos = forms.ModelMultipleChoiceField(queryset=Attachment.objects.none(), required=False,
+                                                 error_messages={'invalid_choice': 'Foto yang dipilih sudah dihapus atau tidak tersedia di laporan ini.'})
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.fields['remove_photos'].queryset = self.instance.attachments.filter(
+                removed_at__isnull=True, content_type__startswith='image/')
 
     class Meta:
         model = MaintenanceReport
@@ -140,8 +164,9 @@ CardFormSet = inlineformset_factory(MaintenanceReport, ActionCard, form=CardForm
 
 
 class ReviewForm(StyledForm, forms.Form):
-    decision = forms.ChoiceField(choices=[('approve', 'Setujui & selesaikan'), ('reject', 'Kembalikan untuk revisi')])
+    decision = forms.ChoiceField(label='Keputusan', choices=[('approve', 'Setujui & selesaikan'), ('reject', 'Kembalikan untuk revisi')])
     notes = forms.CharField(label='Catatan Manager', widget=forms.Textarea, required=False)
+    submission = forms.CharField(widget=forms.HiddenInput, required=False)
 
     def clean(self):
         data = super().clean()

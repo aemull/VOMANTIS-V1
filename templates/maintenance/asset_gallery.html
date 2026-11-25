@@ -1,14 +1,33 @@
 <section id="galeri-mesin" class="panel padded asset-gallery-panel">
-  <div class="section-heading"><h2>Galeri mesin</h2>{% if is_manager %}<a class="text-link" href="#tambah-foto">+ Tambah foto</a>{% endif %}</div>
+  <div class="section-heading"><h2>Galeri mesin</h2>{% if is_manager and not asset.deleted_at %}<a class="text-link" href="#tambah-foto">+ Tambah foto</a>{% endif %}</div>
   {% with photos=asset.photos.all %}
   {% if asset.gambar or photos %}
   <div class="asset-gallery">
-    {% if asset.gambar %}<a class="gallery-photo" href="{% url 'asset_image' asset.asset_uid %}" target="_blank" rel="noopener" data-gallery-photo><img src="{% url 'asset_image' asset.asset_uid %}" alt="Foto utama {{ asset.nama_mesin }}"><span>Foto utama · Perbesar</span></a>{% endif %}
-    {% for photo in photos %}<a class="gallery-photo" href="{% url 'asset_photo' asset.asset_uid photo.pk %}" target="_blank" rel="noopener" data-gallery-photo><img src="{% url 'asset_photo' asset.asset_uid photo.pk %}" alt="Foto galeri {{ asset.nama_mesin }} — {{ forloop.counter }}" loading="lazy"><span>Foto {{ forloop.counter }} · Perbesar</span></a>{% endfor %}
+    {% if asset.gambar %}
+    <div class="gallery-item">
+      <a class="gallery-photo" href="{% url 'asset_image' asset.asset_uid %}" target="_blank" rel="noopener" data-gallery-photo><img src="{% url 'asset_image' asset.asset_uid %}" alt="Foto utama {{ asset.nama_mesin }}"><span>Foto utama · Perbesar</span></a>
+      {% if is_manager and not asset.deleted_at %}
+      <form method="post" action="{% url 'asset_image_delete' asset.asset_uid %}" data-confirm="Hapus foto utama mesin ini?">
+        {% csrf_token %}<input type="hidden" name="image_name" value="{{ asset.gambar.name }}">
+        <button type="submit" class="btn btn-outline-danger">Hapus foto utama</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% for photo in photos %}
+    <div class="gallery-item">
+      <a class="gallery-photo" href="{% url 'asset_photo' asset.asset_uid photo.pk %}" target="_blank" rel="noopener" data-gallery-photo><img src="{% url 'asset_photo' asset.asset_uid photo.pk %}" alt="Foto galeri {{ asset.nama_mesin }} — {{ forloop.counter }}" loading="lazy"><span>Foto {{ forloop.counter }} · Perbesar</span></a>
+      {% if is_manager and not asset.deleted_at %}
+      <form method="post" action="{% url 'asset_photo_delete' asset.asset_uid photo.pk %}" data-confirm="Hapus foto galeri {{ forloop.counter }}?">
+        {% csrf_token %}<button type="submit" class="btn btn-outline-danger" aria-label="Hapus foto galeri {{ forloop.counter }}">Hapus foto</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
   </div>
   {% else %}<div class="machine-placeholder"><i class="mdi mdi-camera-outline" aria-hidden="true"></i><span>Belum ada foto mesin</span></div>{% endif %}
   {% endwith %}
-  {% if is_manager %}
+  {% if is_manager and not asset.deleted_at %}
   <form id="tambah-foto" class="gallery-upload" method="post" enctype="multipart/form-data" action="{% url 'asset_photo_upload' asset.asset_uid %}#tambah-foto">
     {% csrf_token %}{{ photo_form.non_field_errors }}
     <div class="field"><label for="{{ photo_form.photos.id_for_label }}">{{ photo_form.photos.label }}</label>{{ photo_form.photos }}<div class="help-text">{{ photo_form.photos.help_text }}</div>{{ photo_form.photos.errors }}</div>

@@ -1,1 +1,15 @@
-<div class="evidence-grid">{% for evidence in attachments %}<figure class="evidence"><a href="{% url 'attachment' evidence.pk %}" target="_blank" rel="noopener">{% if evidence.is_video %}<span class="video-placeholder"><i class="mdi mdi-play-circle-outline"></i> Buka video</span>{% else %}<img loading="lazy" src="{% url 'attachment' evidence.pk %}" alt="{{ evidence.get_stage_display }}: {{ evidence.original_name }}">{% endif %}</a><figcaption>{{ evidence.get_stage_display }}<small>{{ evidence.original_name }}</small></figcaption></figure>{% endfor %}</div>
+<div class="evidence-grid">
+  {% for evidence in attachments %}
+  <figure class="evidence">
+    <a href="{% url 'attachment' evidence.pk %}" target="_blank" rel="noopener">{% if evidence.is_video %}<span class="video-placeholder"><i class="mdi mdi-play-circle-outline"></i> Buka video</span>{% else %}<img loading="lazy" src="{% url 'attachment' evidence.pk %}" alt="{{ evidence.get_stage_display }}: {{ evidence.original_name }}">{% endif %}</a>
+    <figcaption>
+      {{ evidence.get_stage_display }}<small>{{ evidence.original_name }}</small>
+      {% if can_remove_photos and not evidence.is_video %}
+      {% with photo_id=evidence.pk|stringformat:'s' %}
+      <label class="evidence-remove"><input type="checkbox" name="remove_photos" value="{{ photo_id }}" aria-label="Hapus foto {{ evidence.original_name }}" {% if photo_id in selected_photo_ids %}checked{% endif %}> Hapus foto</label>
+      {% endwith %}
+      {% endif %}
+    </figcaption>
+  </figure>
+  {% endfor %}
+</div>

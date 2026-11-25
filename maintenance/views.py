@@ -6,18 +6,20 @@ import qrcode.image.svg
 from django import forms
 from django.apps import apps
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import Group
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Prefetch, Q, Sum
 from django.http import FileResponse, HttpResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from .access import is_manager, manager_required, visible_tickets
-from .forms import AssetForm, AssetPhotoForm, WorkOrderForm, ReportForm, CardFormSet, ReviewForm, StyledForm
+from .forms import AssetForm, AssetPhotoForm, WorkOrderForm, ReportForm, CardFormSet, ReviewForm, StyledForm, TeamAccountForm
 from .models import (Asset, WorkOrder, MaintenanceReport, Attachment, TicketEvent, FailureHistory,
                      Downtime, KPI, IndicatorFormula, SourceArchive, PMSchedule, AssetPhoto)
 from .services import generate_monthly, start_ticket, review_ticket, add_attachment, report_snapshot
@@ -34,18 +36,45 @@ def dashboard(request):
     counts = dict(tickets.values('status').annotate(total=Count('pk')).values_list('status', 'total'))
     lanes = [{'status': status, 'count': counts.get(status, 0), 'tickets': tickets.filter(status=status)[:8]} for status in ['Open', 'Proses', 'Review', 'Revisi', 'Selesai']]
     context = {'title': 'Dashboard', 'active_nav': 'dashboard', 'today': timezone.localdate(),
-               'asset_count': Asset.objects.exclude(status='Afkir').count(), 'active_count': active.count(),
+               'asset_count': Asset.objects.in_master().exclude(status='Afkir').count(), 'active_count': active.count(),
                'done_count': counts.get('Selesai', 0), 'overdue_count': active.filter(scheduled_date__lt=timezone.localdate()).count(),
                'lanes': lanes, 'upcoming': active.order_by('scheduled_date')[:5],
                'priorities': [{'name': p, 'count': active.filter(prioritas=p).count()} for p, _ in WorkOrder.PRIORITIES],
-               'conditions': Asset.objects.values('kondisi').annotate(total=Count('pk')),
+               'conditions': Asset.objects.in_master().values('kondisi').annotate(total=Count('pk')),
                'recent_events': TicketEvent.objects.filter(ticket__in=tickets).select_related('actor', 'ticket')[:5]}
     return render(request, 'maintenance/dashboard.html', context)
 
 
+@manager_required
+def team_list(request):
+    roles = Group.objects.filter(name__in=['Manager', 'Teknisi']).order_by('name')
+    accounts = get_user_model().objects.filter(Q(groups__in=roles) | Q(is_superuser=True)).distinct()
+    accounts = accounts.prefetch_related(Prefetch('groups', queryset=roles, to_attr='team_roles')).order_by('username')
+    return render(request, 'maintenance/team.html', {'title': 'Akun tim', 'active_nav': 'team',
+                                                   'page_obj': page(request, accounts)})
+
+
+@manager_required
+def team_create(request):
+    form = TeamAccountForm(request.POST if request.method == 'POST' else None)
+    if form.is_valid():
+        try:
+            with transaction.atomic():
+                account = form.save()
+                role, _ = Group.objects.get_or_create(name=form.cleaned_data['role'])
+                account.groups.add(role)
+        except IntegrityError:
+            form.add_error('username', 'Username sudah digunakan. Pilih username lain.')
+        else:
+            messages.success(request, f'Akun {role.name} untuk {account.get_full_name()} berhasil dibuat.')
+            return redirect('team_list')
+    return render(request, 'maintenance/form.html', {'title': 'Tambah akun tim', 'active_nav': 'team', 'form': form,
+                                                   'cancel_url': reverse('team_list'), 'cancel_label': 'Kembali ke akun tim'})
+
+
 @login_required
 def asset_list(request):
-    assets = Asset.objects.prefetch_related('photos').all()
+    assets = Asset.objects.in_master().prefetch_related('photos')
     query = request.GET.get('q', '').strip()
     if query:
         assets = assets.filter(Q(nama_mesin__icontains=query) | Q(asset_uid__icontains=query) | Q(kode_asset__icontains=query) | Q(serial_number__icontains=query) | Q(lokasi__icontains=query))
@@ -64,17 +93,23 @@ def render_asset_detail(request, asset, photo_form=None):
     tickets = visible_tickets(request.user).filter(asset=asset)
     return render(request, 'maintenance/asset_detail.html', {'title': asset.nama_mesin, 'active_nav': 'assets', 'asset': asset,
                   'photo_form': photo_form if photo_form is not None else AssetPhotoForm(),
-                  'tickets': tickets, 'fields': [(f.verbose_name.replace('_', ' ').capitalize(), f.value_from_object(asset)) for f in Asset._meta.fields if f.name not in ['gambar', 'id_asset', 'is_demo']]})
+                  'tickets': tickets, 'fields': [(f.verbose_name.replace('_', ' ').capitalize(), f.value_from_object(asset)) for f in Asset._meta.fields if f.name not in ['gambar', 'id_asset', 'is_demo', 'deleted_at']]})
 
 
 @manager_required
+@transaction.atomic
 def asset_edit(request, uid=None):
-    asset = get_object_or_404(Asset, asset_uid=uid) if uid else None
+    assets = Asset.objects.in_master()
+    if request.method == 'POST':
+        assets = assets.select_for_update()
+    asset = get_object_or_404(assets, asset_uid=uid) if uid else None
+    previous_image = asset.gambar if asset else None
     form = AssetForm(request.POST or None, request.FILES or None, instance=asset)
     if request.method == 'POST' and form.is_valid():
-        with transaction.atomic():
-            asset = form.save()
-            save_asset_photos(asset, form.cleaned_data['photos'])
+        asset = form.save()
+        save_asset_photos(asset, form.cleaned_data['photos'])
+        if previous_image and previous_image.name != asset.gambar.name:
+            delete_unused_main_image(previous_image)
         messages.success(request, 'Data mesin tersimpan. ID unik dan riwayat tetap dipertahankan.')
         return redirect('asset_detail', uid=asset.asset_uid)
     return render(request, 'maintenance/form.html', {'title': 'Edit mesin' if asset else 'Tambah mesin', 'form': form, 'active_nav': 'assets'})
@@ -97,8 +132,9 @@ def save_asset_photos(asset, files):
 
 @manager_required
 @require_POST
+@transaction.atomic
 def asset_photo_upload(request, uid):
-    asset = get_object_or_404(Asset.objects.prefetch_related('photos'), asset_uid=uid)
+    asset = get_object_or_404(Asset.objects.in_master().select_for_update(), asset_uid=uid)
     form = AssetPhotoForm(request.POST, request.FILES)
     if form.is_valid():
         save_asset_photos(asset, form.cleaned_data['photos'])
@@ -116,12 +152,57 @@ def asset_photo(request, uid, photo_id):
     return response
 
 
+def delete_unused_main_image(image):
+    def delete_if_unused():
+        if not Asset.objects.filter(gambar=image.name).exists():
+            image.delete(save=False)
+
+    transaction.on_commit(delete_if_unused, robust=True)
+
+
+@manager_required
+@require_POST
+@transaction.atomic
+def asset_image_delete(request, uid):
+    asset = get_object_or_404(Asset.objects.in_master().select_for_update(), asset_uid=uid)
+    image = asset.gambar
+    if image and image.name == request.POST.get('image_name'):
+        asset.gambar = ''
+        asset.save(update_fields=['gambar'])
+        delete_unused_main_image(image)
+        messages.success(request, 'Foto utama dihapus.')
+    else:
+        messages.error(request, 'Foto utama sudah berubah. Pilih kembali foto yang ingin dihapus.')
+    return redirect(reverse('asset_detail', args=[uid]) + '#galeri-mesin')
+
+
+@manager_required
+@require_POST
+@transaction.atomic
+def asset_photo_delete(request, uid, photo_id):
+    asset = get_object_or_404(Asset.objects.in_master().select_for_update(), asset_uid=uid)
+    photo = get_object_or_404(asset.photos, pk=photo_id)
+    image = photo.image
+    photo.delete()
+    transaction.on_commit(lambda: image.delete(save=False), robust=True)
+    messages.success(request, 'Foto yang dipilih dihapus dari galeri.')
+    return redirect(reverse('asset_detail', args=[uid]) + '#galeri-mesin')
+
+
+@manager_required
+@require_POST
+def asset_delete(request, uid):
+    asset = get_object_or_404(Asset, asset_uid=uid)
+    if Asset.objects.in_master().filter(pk=asset.pk).update(deleted_at=timezone.now()):
+        messages.success(request, f'{asset.nama_mesin} dihapus dari Master mesin. Riwayat maintenance masih dapat dibuka.')
+    return redirect('asset_list')
+
+
 @manager_required
 @require_POST
 def asset_retire(request, uid):
-    asset = get_object_or_404(Asset, asset_uid=uid)
-    asset.status = 'Afkir'
-    asset.save(update_fields=['status'])
+    if not Asset.objects.in_master().filter(asset_uid=uid).update(status='Afkir'):
+        raise Http404
     messages.success(request, 'Mesin dinonaktifkan. Seluruh riwayat tetap tersimpan; tiket yang masih terbuka dapat diselesaikan atau dibatalkan Manager.')
     return redirect('asset_detail', uid=uid)
 
@@ -140,7 +221,10 @@ def asset_image(request, uid):
     asset = get_object_or_404(Asset, asset_uid=uid)
     if not asset.gambar:
         raise Http404
-    return FileResponse(asset.gambar.open('rb'))
+    response = FileResponse(asset.gambar.open('rb'))
+    response['Cache-Control'] = 'private, no-store'
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 
 @login_required
@@ -166,19 +250,33 @@ def ticket_edit(request, pk=None):
     if request.method == 'POST' and form.is_valid():
         try:
             with transaction.atomic():
+                result = form.save(commit=False)
+                previously_confirmed = False
                 if ticket:
                     current = WorkOrder.objects.select_for_update().get(pk=pk)
                     if current.status not in ['Open', 'Revisi']:
                         raise PermissionDenied('Status tiket telah berubah.')
-                result = form.save(commit=False)
+                    previously_confirmed = current.confirmed
+                if (not ticket or result.asset_id != current.asset_id) and not Asset.objects.in_master().exclude(
+                    status='Afkir').select_for_update().filter(pk=result.asset_id).exists():
+                    raise ValidationError('Mesin sudah tidak tersedia untuk penugasan. Pilih mesin lain.')
+                actor_name = request.user.get_full_name() or request.user.username
                 if not ticket:
                     result.created_by = request.user
-                    result.pelapor = request.user.get_full_name() or request.user.username
-                result.teknisi = (result.assigned_to.get_full_name() or result.assigned_to.username) if result.assigned_to else None
-                result.save()
+                    result.pelapor = actor_name[:100]
+                result.teknisi = result.assignee_name[:100] if result.assigned_to_id else None
+                result.save(update_fields=[*form.Meta.fields, 'teknisi'] if ticket else None)
                 PMSchedule.objects.filter(work_order=result).update(tanggal_terjadwal=result.scheduled_date, petugas=result.teknisi)
-                TicketEvent.objects.create(ticket=result, actor=request.user, action='Penugasan diperbarui' if ticket else 'Tiket dibuat',
-                                           notes=f'{result.scheduled_date} · {result.teknisi or "Belum ditugaskan"} · {result.prioritas}')
+                action = 'Penugasan diperbarui' if ticket else 'Tiket dibuat'
+                if result.confirmed and not previously_confirmed:
+                    action = 'Jadwal disetujui' if ticket else 'Tiket dibuat dan jadwal disetujui'
+                elif previously_confirmed and not result.confirmed:
+                    action = 'Persetujuan jadwal dicabut'
+                TicketEvent.objects.create(ticket=result, actor=request.user, action=action,
+                                           notes=f'{result.scheduled_date} · {result.teknisi or "Belum ditugaskan"} · {result.prioritas}',
+                                           snapshot={'actor_name': actor_name})
+        except ValidationError as exc:
+            form.add_error('asset', exc)
         except IntegrityError:
             form.add_error(None, 'Jadwal berbenturan dengan perubahan terbaru. Pilih tanggal / teknisi lain dan coba lagi.')
         else:
@@ -190,10 +288,13 @@ def ticket_edit(request, pk=None):
 @login_required
 def ticket_detail(request, pk):
     ticket = get_object_or_404(visible_tickets(request.user), pk=pk)
-    report = MaintenanceReport.objects.filter(ticket=ticket).prefetch_related('cards__attachments', 'attachments').first()
+    attachments = Attachment.objects.filter(removed_at__isnull=True)
+    report = MaintenanceReport.objects.filter(ticket=ticket).select_related('author').prefetch_related(
+        Prefetch('cards__attachments', queryset=attachments)).first()
+    submission = report.submitted_at.isoformat() if report and report.submitted_at else ''
     return render(request, 'maintenance/ticket_detail.html', {'title': ticket.wo_number, 'active_nav': 'tickets', 'ticket': ticket, 'report': report,
-                  'review_form': ReviewForm(), 'can_execute': ticket.assigned_to_id == request.user.pk and ticket.confirmed,
-                  'general_attachments': report.attachments.filter(card__isnull=True) if report else [],
+                  'review_form': ReviewForm(initial={'submission': submission}), 'can_execute': ticket.assigned_to_id == request.user.pk and ticket.confirmed,
+                  'general_attachments': attachments.filter(report=report, card__isnull=True) if report else [],
                   'events': ticket.events.select_related('actor')})
 
 
@@ -212,15 +313,20 @@ def ticket_start(request, pk):
 @manager_required
 @require_POST
 def ticket_cancel(request, pk):
-    ticket = get_object_or_404(WorkOrder, pk=pk)
     notes = request.POST.get('notes', '').strip()
     with transaction.atomic():
-        if not notes or not WorkOrder.objects.filter(pk=pk, status__in=['Open', 'Revisi']).update(status='Batal'):
+        ticket = get_object_or_404(WorkOrder.objects.select_for_update(), pk=pk)
+        if not notes or ticket.status not in ['Open', 'Revisi']:
             messages.error(request, 'Pembatalan membutuhkan alasan dan hanya diizinkan pada tiket Open / Revisi.')
         else:
+            ticket.status = 'Batal'
+            ticket.save(update_fields=['status'])
             PMSchedule.objects.filter(work_order=ticket).update(status='Batal')
-            TicketEvent.objects.create(ticket=ticket, actor=request.user, action='Tiket dibatalkan', notes=notes)
-            messages.success(request, 'Tiket dibatalkan; data dan lampiran tetap tersimpan.')
+            action = 'Tiket dibatalkan' if ticket.confirmed else 'Tiket ditolak'
+            actor_name = request.user.get_full_name() or request.user.username
+            TicketEvent.objects.create(ticket=ticket, actor=request.user, action=action, notes=notes,
+                                       snapshot={'actor_name': actor_name})
+            messages.success(request, f'{action}. Data dan lampiran tetap tersimpan.')
     return redirect('ticket_detail', pk=pk)
 
 
@@ -230,29 +336,39 @@ def report_edit(request, pk):
     if not ticket.confirmed or ticket.status not in ['Proses', 'Revisi']:
         raise PermissionDenied('Laporan hanya dapat diisi oleh teknisi yang ditugaskan saat Proses / Revisi.')
     report = MaintenanceReport.objects.filter(ticket=ticket).first() or MaintenanceReport(ticket=ticket, author=request.user)
+    attachments = report.attachments.filter(removed_at__isnull=True).order_by('pk') if report.pk else Attachment.objects.none()
     form = ReportForm(request.POST or None, request.FILES or None, instance=report)
     formset = CardFormSet(request.POST or None, request.FILES or None, instance=report, prefix='cards')
     if request.method == 'POST':
         valid = form.is_valid()
         cards_valid = formset.is_valid()
         if valid and cards_valid:
+            removed = form.cleaned_data['remove_photos']
+            removed_ids = [photo.pk for photo in removed]
+            remaining_evidence = set(attachments.exclude(pk__in=removed_ids).values_list('card_id', 'stage'))
             for field, stage in [('before_file', 'before'), ('after_file', 'after')]:
-                if not form.cleaned_data.get(field) and not (report.pk and report.attachments.filter(stage=stage, card__isnull=True).exists()):
+                if not form.cleaned_data.get(field) and (None, stage) not in remaining_evidence:
                     form.add_error(field, 'Lampiran bukti wajib disertakan sebelum mengirim laporan.')
             for card_form in formset:
                 if not card_form.cleaned_data:
                     continue
                 for field, stage in [('damage_file', 'damage'), ('repair_file', 'repair')]:
-                    if not card_form.cleaned_data.get(field) and not (card_form.instance.pk and card_form.instance.attachments.filter(stage=stage).exists()):
+                    if not card_form.cleaned_data.get(field) and (
+                        not card_form.instance.pk or (card_form.instance.pk, stage) not in remaining_evidence
+                    ):
                         card_form.add_error(field, 'Bukti wajib dilampirkan untuk kartu ini.')
             if form.is_valid() and all(not cf.errors for cf in formset):
                 with transaction.atomic():
                     if not WorkOrder.objects.filter(pk=pk, assigned_to=request.user, confirmed=True, status__in=['Proses', 'Revisi']).update(status='Review'):
                         raise PermissionDenied('Status tiket berubah; laporan tidak disimpan.')
+                    last_submission = MaintenanceReport.objects.filter(ticket=ticket).values_list('submitted_at', flat=True).first()
+                    if last_submission != report.submitted_at:
+                        raise PermissionDenied('Laporan sudah diperbarui. Muat ulang sebelum mengirim revisi.')
                     report = form.save(commit=False)
                     report.author = request.user
                     report.submitted_at = timezone.now()
                     report.save()
+                    removed.update(removed_at=report.submitted_at)
                     for field, stage in [('before_file', 'before'), ('after_file', 'after')]:
                         add_attachment(report, None, stage, form.cleaned_data.get(field))
                     for card_form in formset:
@@ -263,11 +379,23 @@ def report_edit(request, pk):
                         card.save()
                         for field, stage in [('damage_file', 'damage'), ('repair_file', 'repair')]:
                             add_attachment(report, card, stage, card_form.cleaned_data.get(field))
-                    TicketEvent.objects.create(ticket=ticket, actor=request.user, action='Laporan dikirim untuk review', snapshot=report_snapshot(report))
+                    snapshot = report_snapshot(report)
+                    if removed_ids:
+                        snapshot['removed_photo_ids'] = removed_ids
+                    TicketEvent.objects.create(ticket=ticket, actor=request.user, action='Laporan dikirim untuk review', snapshot=snapshot)
                 messages.success(request, 'Laporan terkirim. Manager dapat meninjau seluruh kartu dan bukti.')
                 return redirect('ticket_detail', pk=pk)
+    card_attachments = {}
+    general_attachments = []
+    for evidence in attachments:
+        if evidence.card_id is None:
+            general_attachments.append(evidence)
+        else:
+            card_attachments.setdefault(evidence.card_id, []).append(evidence)
     return render(request, 'maintenance/report_form.html', {'title': 'Laporan maintenance', 'active_nav': 'tickets', 'ticket': ticket,
-                                                           'form': form, 'formset': formset, 'report': report})
+                  'form': form, 'formset': formset, 'general_attachments': general_attachments,
+                  'report_cards': [(card_form, card_attachments.get(card_form.instance.pk, [])) for card_form in formset],
+                  'selected_photo_ids': request.POST.getlist('remove_photos'), 'report': report})
 
 
 @manager_required
@@ -277,7 +405,7 @@ def ticket_review(request, pk):
     form = ReviewForm(request.POST)
     if form.is_valid() and MaintenanceReport.objects.filter(ticket=ticket).exists():
         try:
-            review_ticket(ticket, request.user, form.cleaned_data['decision'], form.cleaned_data['notes'])
+            review_ticket(ticket, request.user, form.cleaned_data['decision'], form.cleaned_data['notes'], form.cleaned_data['submission'])
             messages.success(request, 'Keputusan review tersimpan.')
         except ValidationError as exc:
             messages.error(request, '; '.join(exc.messages))
@@ -288,7 +416,7 @@ def ticket_review(request, pk):
 
 @login_required
 def attachment(request, pk):
-    evidence = get_object_or_404(Attachment.objects.select_related('report__ticket'), pk=pk)
+    evidence = get_object_or_404(Attachment.objects.select_related('report__ticket'), pk=pk, removed_at__isnull=True)
     if not is_manager(request.user) and evidence.report.ticket.assigned_to_id != request.user.pk:
         raise PermissionDenied
     response = FileResponse(evidence.file.open('rb'), content_type=evidence.content_type, filename=evidence.original_name)
@@ -328,7 +456,7 @@ def analytics(request):
         'kpis': KPI.objects.select_related('asset').all(), 'formulas': IndicatorFormula.objects.all(),
         'failure_count': FailureHistory.objects.count(), 'downtime': Downtime.objects.aggregate(total=Sum('durasi_jam'))['total'] or 0,
         'completed': WorkOrder.objects.filter(status='Selesai').count(),
-        'conditions': Asset.objects.values('kondisi').annotate(total=Count('pk'))})
+        'conditions': Asset.objects.in_master().values('kondisi').annotate(total=Count('pk'))})
 
 
 SOURCE_TABLES = ['master_asset', 'kondisi_awal', 'work_order', 'histori_kerusakan', 'pm_schedule', 'downtime', 'kpi_before_after',

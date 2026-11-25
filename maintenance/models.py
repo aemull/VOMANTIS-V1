@@ -23,6 +23,11 @@ def decimal_field():
     return models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
 
 
+class AssetQuerySet(models.QuerySet):
+    def in_master(self):
+        return self.filter(deleted_at__isnull=True)
+
+
 class Asset(models.Model):
     STATUS = [(s, s) for s in ['Operasional', 'Tidak Operasional', 'Perbaikan', 'Afkir']]
     CONDITIONS = [(s, s) for s in ['Baik', 'Rusak Ringan', 'Rusak Berat']]
@@ -47,6 +52,9 @@ class Asset(models.Model):
     gambar = models.ImageField(upload_to='machines/%Y/%m/', blank=True)
     maintenance_anchor = models.DateField('Tanggal acuan maintenance bulanan', default=timezone.localdate)
     is_demo = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField('Dihapus dari master pada', blank=True, null=True, editable=False)
+
+    objects = AssetQuerySet.as_manager()
 
     class Meta:
         db_table = 'master_asset'
@@ -344,6 +352,7 @@ class Attachment(models.Model):
     original_name = models.CharField(max_length=255)
     content_type = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
+    removed_at = models.DateTimeField(blank=True, null=True, editable=False)
 
     @property
     def is_video(self):
@@ -363,6 +372,8 @@ class TicketEvent(models.Model):
 
     @property
     def actor_name(self):
+        if name := self.snapshot.get('actor_name'):
+            return name
         if self.actor_id is None:
             return 'Sistem'
         return self.actor.get_full_name() or self.actor.username

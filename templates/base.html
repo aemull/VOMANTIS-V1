@@ -21,7 +21,8 @@
       <a class="{% if active_nav == 'assets' %}active{% endif %}" href="{% url 'asset_list' %}"><i class="mdi mdi-cube-outline" aria-hidden="true"></i> Master mesin</a>
       <a class="{% if active_nav == 'tickets' %}active{% endif %}" href="{% url 'ticket_list' %}"><i class="mdi mdi-clipboard-text-outline" aria-hidden="true"></i> Work order {% if review_count %}<span class="nav-count">{{ review_count }}</span>{% endif %}</a>
       <a class="{% if active_nav == 'schedule' %}active{% endif %}" href="{% url 'schedule' %}"><i class="mdi mdi-calendar-blank" aria-hidden="true"></i> Jadwal</a>
-      {% if is_manager %}<div class="nav-caption">Laporan</div>
+      {% if is_manager %}<a class="{% if active_nav == 'team' %}active{% endif %}" href="{% url 'team_list' %}"><i class="mdi mdi-account-multiple-outline" aria-hidden="true"></i> Akun tim</a>
+      <div class="nav-caption">Laporan</div>
       <a class="{% if active_nav == 'analytics' %}active{% endif %}" href="{% url 'analytics' %}"><i class="mdi mdi-chart-bar" aria-hidden="true"></i> Statistik & KPI</a>
       <a class="{% if active_nav == 'data' %}active{% endif %}" href="{% url 'source_data' %}"><i class="mdi mdi-database" aria-hidden="true"></i> Data & arsip</a>{% endif %}
     </nav>

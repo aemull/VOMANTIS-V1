@@ -1,0 +1,24 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-heading">
+  <div><h1>Akun tim</h1></div>
+  <a class="btn btn-primary" href="{% url 'team_create' %}">+ Tambah akun</a>
+</div>
+<section class="panel">
+  <div class="table-responsive">
+    <table class="table app-table" role="table">
+      <thead role="rowgroup"><tr role="row"><th scope="col">Nama</th><th scope="col">Username</th><th scope="col">Peran</th><th scope="col">Status</th></tr></thead>
+      <tbody role="rowgroup">
+        {% for account in page_obj %}
+        <tr role="row">
+          <td role="cell" data-label="Nama">{{ account.get_full_name|default:account.username }}</td>
+          <td role="cell" data-label="Username">{{ account.username }}</td>
+          <td role="cell" data-label="Peran">{% if account.is_superuser %}Manager{% else %}{{ account.team_roles|join:', ' }}{% endif %}</td>
+          <td role="cell" data-label="Status">{% if account.is_active %}Aktif{% else %}Nonaktif{% endif %}</td>
+        </tr>
+        {% empty %}<tr role="row"><td role="cell" colspan="4" class="empty-inline">Belum ada akun tim.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% include 'maintenance/pagination.html' %}
+{% endblock %}

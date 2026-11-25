@@ -4,7 +4,7 @@ from datetime import date
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
-from .models import Asset, WorkOrder, PMSchedule, TicketEvent, Attachment
+from .models import Asset, WorkOrder, PMSchedule, TicketEvent, Attachment, MaintenanceReport
 
 
 @transaction.atomic
@@ -12,8 +12,11 @@ def generate_monthly(target=None):
     """One preventive ticket per active asset and calendar month; safe to rerun."""
     target = target or timezone.localdate()
     created = 0
-    for asset in Asset.objects.exclude(status='Afkir').filter(maintenance_anchor__lte=date(target.year, target.month, calendar.monthrange(target.year, target.month)[1])):
-        scheduled = date(target.year, target.month, min(asset.maintenance_anchor.day, calendar.monthrange(target.year, target.month)[1]))
+    last_day = calendar.monthrange(target.year, target.month)[1]
+    assets = Asset.objects.in_master().exclude(status='Afkir').filter(
+        maintenance_anchor__lte=date(target.year, target.month, last_day)).order_by('pk')
+    for asset in assets.select_for_update():
+        scheduled = date(target.year, target.month, min(asset.maintenance_anchor.day, last_day))
         key = f'{asset.pk}:{target:%Y-%m}'
         ticket, new = WorkOrder.objects.get_or_create(monthly_key=key, defaults={
             'asset': asset, 'jenis': 'Preventif', 'prioritas': 'Sedang', 'severity': asset.kondisi,
@@ -39,7 +42,7 @@ def report_snapshot(report):
     return {'kondisi_sebelum': report.kondisi_sebelum, 'kondisi_sesudah': report.kondisi_sesudah,
             'resulting_condition': report.resulting_condition,
             'cards': list(report.cards.values('id', 'komponen', 'detail_kerusakan', 'tindakan_perbaikan')),
-            'attachment_ids': list(report.attachments.values_list('pk', flat=True))}
+            'attachment_ids': list(report.attachments.filter(removed_at__isnull=True).values_list('pk', flat=True))}
 
 
 @transaction.atomic
@@ -53,17 +56,20 @@ def start_ticket(ticket, actor):
 
 
 @transaction.atomic
-def review_ticket(ticket, actor, decision, notes):
-    report = ticket.report
+def review_ticket(ticket, actor, decision, notes, submission=''):
     new_status = 'Selesai' if decision == 'approve' else 'Revisi'
     changed = WorkOrder.objects.filter(pk=ticket.pk, status='Review').update(status=new_status)
     if not changed:
         raise ValidationError('Laporan sudah ditinjau atau belum dikirim.')
+    report = MaintenanceReport.objects.get(ticket=ticket)
+    if submission and (not report.submitted_at or submission != report.submitted_at.isoformat()):
+        raise ValidationError('Teknisi sudah mengirim versi baru. Muat ulang dan tinjau laporan terbaru.')
     report.manager_notes = notes
     report.save(update_fields=['manager_notes'])
+    reviewer_name = actor.get_full_name() or actor.username
     if decision == 'approve':
         now = timezone.now()
-        WorkOrder.objects.filter(pk=ticket.pk).update(selesai_pekerjaan=now, verifikasi=actor.get_full_name() or actor.username,
+        WorkOrder.objects.filter(pk=ticket.pk).update(selesai_pekerjaan=now, verifikasi=reviewer_name[:100],
                                                      tindakan='\n'.join(report.cards.values_list('tindakan_perbaikan', flat=True)))
         # A retired asset stays retired even when its remaining work is reviewed.
         Asset.objects.filter(pk=ticket.asset_id).exclude(status='Afkir').update(
@@ -72,4 +78,4 @@ def review_ticket(ticket, actor, decision, notes):
         PMSchedule.objects.filter(work_order=ticket).update(status='Terlaksana', tanggal_realisasi=timezone.localdate(),
                                                            hasil=report.kondisi_sesudah, petugas=report.author.get_full_name() or report.author.username)
     TicketEvent.objects.create(ticket=ticket, actor=actor, action='Laporan disetujui' if decision == 'approve' else 'Revisi diminta',
-                               notes=notes, snapshot=report_snapshot(report))
+                               notes=notes, snapshot=report_snapshot(report) | {'actor_name': reviewer_name})
