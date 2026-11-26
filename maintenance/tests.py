@@ -9,8 +9,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.core.management import call_command, get_commands
-from django.core.management.base import CommandError
+from django.core.management import call_command
 from django.db import IntegrityError, transaction, connection
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
@@ -81,8 +80,8 @@ class SourcePreservationTests(TestCase):
 class WorkflowTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        manager_group = Group.objects.create(name='Manager')
-        tech_group = Group.objects.create(name='Teknisi')
+        manager_group = Group.objects.get(name='Manager')
+        tech_group = Group.objects.get(name='Teknisi')
         cls.manager = get_user_model().objects.create_user('manager-test', password='TestPassword!123')
         cls.manager.groups.add(manager_group)
         cls.tech = get_user_model().objects.create_user('tech-test', password='TestPassword!123')
@@ -478,22 +477,21 @@ class WorkflowTests(TestCase):
 
 
 class FreshInstallationTests(TestCase):
-    def test_bootstrap_creates_roles_without_users_or_business_data(self):
-        for _ in range(2):
-            call_command('create_roles', stdout=io.StringIO())
-            call_command('generate_schedules', stdout=io.StringIO())
+    def test_migrations_provide_roles_without_users_or_business_data(self):
         self.assertEqual(set(Group.objects.values_list('name', flat=True)), {'Manager', 'Teknisi'})
+        permissions = Group.objects.get(name='Manager').permissions
+        self.assertTrue(permissions.filter(codename='change_workorder').exists())
+        self.assertFalse(permissions.filter(codename__startswith='delete_').exists())
+        call_command('generate_schedules', stdout=io.StringIO())
         self.assertFalse(get_user_model().objects.exists())
         for model in [Asset, WorkOrder, MaintenanceReport, Attachment, TicketEvent,
                       SourceArchive, SourceRecord, IndicatorFormula, KPI, SUS, PMSchedule]:
             with self.subTest(model=model.__name__):
                 self.assertFalse(model.objects.exists())
-        self.assertNotIn('seed_demo', get_commands())
 
     def test_first_administrator_can_open_empty_application(self):
-        call_command('create_roles', stdout=io.StringIO())
         with patch.dict('os.environ', {'DJANGO_SUPERUSER_PASSWORD': 'TestPassword!123'}):
-            call_command('seed_admin', username='fresh-admin', noinput=True, stdout=io.StringIO())
+            call_command('createsuperuser', username='fresh-admin', email='', interactive=False, stdout=io.StringIO())
         admin = get_user_model().objects.get(username='fresh-admin')
         self.assertTrue(admin.is_superuser and admin.is_staff and admin.is_active)
         self.assertTrue(admin.check_password('TestPassword!123'))
@@ -501,51 +499,3 @@ class FreshInstallationTests(TestCase):
         for url in ['/', '/machines/', '/tickets/', '/schedule/', '/analytics/', '/data/']:
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
-
-    def test_admin_seed_is_repeatable_and_creates_no_business_data(self):
-        with patch.dict('os.environ', {'DJANGO_SUPERUSER_PASSWORD': 'FirstPassword!123'}):
-            call_command('seed_admin', username='admin', email='first@example.com', noinput=True, stdout=io.StringIO())
-        with patch.dict('os.environ', {'DJANGO_SUPERUSER_PASSWORD': 'ChangedPassword!456'}):
-            call_command('seed_admin', username='admin', email='other@example.com', noinput=True, stdout=io.StringIO())
-        admin = get_user_model().objects.get(username='admin')
-        self.assertEqual(get_user_model().objects.count(), 1)
-        self.assertTrue(admin.check_password('FirstPassword!123'))
-        self.assertEqual(admin.email, 'first@example.com')
-        from django.apps import apps
-        for model in apps.get_app_config('maintenance').get_models():
-            self.assertFalse(model.objects.exists(), model.__name__)
-
-    def test_admin_seed_does_not_promote_or_reactivate_existing_users(self):
-        user = get_user_model().objects.create_user('existing', password='OriginalPassword!123')
-        with patch.dict('os.environ', {'DJANGO_SUPERUSER_PASSWORD': 'AnotherPassword!456'}):
-            with self.assertRaises(CommandError):
-                call_command('seed_admin', username=user.username, noinput=True)
-        user.refresh_from_db()
-        self.assertFalse(user.is_superuser)
-        self.assertTrue(user.check_password('OriginalPassword!123'))
-        user.is_superuser = user.is_staff = True
-        user.is_active = False
-        user.save()
-        with self.assertRaises(CommandError):
-            call_command('seed_admin', username=user.username, noinput=True)
-        user.refresh_from_db()
-        self.assertFalse(user.is_active)
-
-    def test_admin_seed_requires_a_strong_password(self):
-        for password in ['', '12345678']:
-            with self.subTest(password_supplied=bool(password)):
-                with patch.dict('os.environ', {'DJANGO_SUPERUSER_PASSWORD': password}):
-                    with self.assertRaises(CommandError):
-                        call_command('seed_admin', username='admin', noinput=True)
-                self.assertFalse(get_user_model().objects.exists())
-
-    def test_admin_seed_prompts_and_requires_matching_confirmation(self):
-        with patch.dict('os.environ', {'DJANGO_SUPERUSER_PASSWORD': ''}), \
-                patch('sys.stdin.isatty', return_value=True):
-            with patch('getpass.getpass', side_effect=['FirstPassword!123', 'DifferentPassword!456']):
-                with self.assertRaises(CommandError):
-                    call_command('seed_admin', username='admin', stdout=io.StringIO())
-            self.assertFalse(get_user_model().objects.exists())
-            with patch('getpass.getpass', side_effect=['FirstPassword!123', 'FirstPassword!123']):
-                call_command('seed_admin', username='admin', stdout=io.StringIO())
-        self.assertTrue(get_user_model().objects.get(username='admin').check_password('FirstPassword!123'))

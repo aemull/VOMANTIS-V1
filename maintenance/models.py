@@ -116,8 +116,7 @@ class WorkOrder(models.Model):
     confirmed = models.BooleanField('Jadwal dikonfirmasi', default=False)
     monthly_key = models.CharField(max_length=60, unique=True, blank=True, null=True, editable=False)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, blank=True, null=True, related_name='created_tickets')
-    # NULL releases the reservation; MariaDB does not support partial unique indexes.
-    # Virtual storage also allows migrating a populated legacy SQLite database.
+    # Only active, confirmed tickets reserve a technician's date in the unique index.
     active_scheduled_date = models.GeneratedField(
         expression=models.Case(
             models.When(confirmed=True, status__in=['Open', 'Proses', 'Review', 'Revisi'], then=F('scheduled_date')),

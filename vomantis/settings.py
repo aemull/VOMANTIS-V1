@@ -25,33 +25,22 @@ TEMPLATES = [{'BACKEND': 'django.template.backends.django.DjangoTemplates', 'DIR
                   'django.template.context_processors.request', 'django.contrib.auth.context_processors.auth',
                   'django.contrib.messages.context_processors.messages', 'maintenance.context.navigation']}}]
 WSGI_APPLICATION = 'vomantis.wsgi.application'
-# MariaDB uses Django's MySQL backend. SQLite is opt-in for legacy export/tests.
-DB_ENGINE = os.environ.get('DB_ENGINE', 'mariadb')
-if DB_ENGINE == 'sqlite':
-    DATABASES = {'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.environ.get('SQLITE_PATH', str(BASE_DIR / 'db.sqlite3')),
-        'OPTIONS': {'timeout': 20},
-    }}
-elif DB_ENGINE == 'mariadb':
-    DATABASES = {'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': os.environ.get('DB_NAME', 'vomantis'),
-        'USER': os.environ.get('DB_USER', 'root'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-        'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
-        'PORT': os.environ.get('DB_PORT', '3306'),
-        'CONN_MAX_AGE': 60,
-        'CONN_HEALTH_CHECKS': True,
-        'TEST': {'CHARSET': 'utf8mb4', 'COLLATION': 'utf8mb4_unicode_ci'},
-        'OPTIONS': {
-            'charset': 'utf8mb4',
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION'",
-            'isolation_level': 'read committed',
-        },
-    }}
-else:
-    raise RuntimeError('DB_ENGINE harus mariadb atau sqlite.')
+DATABASES = {'default': {
+    'ENGINE': 'django.db.backends.mysql',
+    'NAME': os.environ.get('DB_NAME', 'vomantis'),
+    'USER': os.environ.get('DB_USER', 'root'),
+    'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+    'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
+    'PORT': os.environ.get('DB_PORT', '3306'),
+    'CONN_MAX_AGE': 60,
+    'CONN_HEALTH_CHECKS': True,
+    'TEST': {'CHARSET': 'utf8mb4', 'COLLATION': 'utf8mb4_unicode_ci'},
+    'OPTIONS': {
+        'charset': 'utf8mb4',
+        'init_command': "SET sql_mode='STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION'",
+        'isolation_level': 'read committed',
+    },
+}}
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -63,7 +52,7 @@ TIME_ZONE = 'Asia/Jakarta'
 USE_I18N = True
 USE_TZ = True
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [BASE_DIR / 'static', ('corona', BASE_DIR / 'template_styles/template/assets')]
+STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = Path(os.environ.get('DJANGO_STATIC_ROOT', str(BASE_DIR / 'staticfiles')))
 MEDIA_ROOT = Path(os.environ.get('DJANGO_MEDIA_ROOT', str(BASE_DIR / 'media')))
 # Uploaded evidence is served through authenticated application views, not a public media route.
