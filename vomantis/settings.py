@@ -1,12 +1,21 @@
 import os
 from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DEBUG = os.environ.get('DJANGO_DEBUG', '1') == '1'
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'local-development-only-vomantis-change-for-production')
+load_dotenv(BASE_DIR / '.env', override=False, interpolate=False, encoding='utf-8-sig')
+
+required = ('DB_NAME', 'DB_USER', 'DB_PASSWORD', 'DB_HOST', 'DB_PORT', 'DJANGO_SECRET_KEY')
+missing = [key for key in required if key not in os.environ or (key != 'DB_PASSWORD' and not os.environ[key])]
+if missing:
+    raise ImproperlyConfigured('Lengkapi .env atau environment server: ' + ', '.join(missing))
+
+DEBUG = os.environ.get('DJANGO_DEBUG', '0') == '1'
+SECRET_KEY = os.environ['DJANGO_SECRET_KEY']
 if not DEBUG and SECRET_KEY.startswith('local-development'):
-    raise RuntimeError('Set DJANGO_SECRET_KEY untuk production.')
-ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,[::1],testserver,192.168.15.107').split(',')
+    raise ImproperlyConfigured('Gunakan DJANGO_SECRET_KEY khusus produksi.')
+ALLOWED_HOSTS = [host.strip() for host in os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',') if host.strip()]
 CSRF_TRUSTED_ORIGINS = [v for v in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',') if v]
 INSTALLED_APPS = [
     'django.contrib.admin', 'django.contrib.auth', 'django.contrib.contenttypes',
@@ -27,11 +36,11 @@ TEMPLATES = [{'BACKEND': 'django.template.backends.django.DjangoTemplates', 'DIR
 WSGI_APPLICATION = 'vomantis.wsgi.application'
 DATABASES = {'default': {
     'ENGINE': 'django.db.backends.mysql',
-    'NAME': os.environ.get('DB_NAME', 'vomantis'),
-    'USER': os.environ.get('DB_USER', 'root'),
-    'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-    'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
-    'PORT': os.environ.get('DB_PORT', '3306'),
+    'NAME': os.environ['DB_NAME'],
+    'USER': os.environ['DB_USER'],
+    'PASSWORD': os.environ['DB_PASSWORD'],
+    'HOST': os.environ['DB_HOST'],
+    'PORT': os.environ['DB_PORT'],
     'CONN_MAX_AGE': 60,
     'CONN_HEALTH_CHECKS': True,
     'TEST': {'CHARSET': 'utf8mb4', 'COLLATION': 'utf8mb4_unicode_ci'},
